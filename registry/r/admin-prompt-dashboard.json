@@ -1,0 +1,23 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "admin-prompt-dashboard",
+  "type": "registry:component",
+  "title": "Admin Prompt Dashboard",
+  "description": "Prompt admin view whose first/landing tab is the overview dashboard and destructive ops live in a guarded Maintenance tab; wraps the package's PromptProvider + RequireSuperuser. Requires @mano8/astro-prompt-m8 (and a fa-auth-m8 token adapter) installed.",
+  "dependencies": [
+    "lucide-react"
+  ],
+  "registryDependencies": [
+    "tabs",
+    "./node_modules/@mano8/astro-prompt-m8/registry/r/prompt-dashboard-overview.json",
+    "./node_modules/@mano8/astro-prompt-m8/registry/r/prompt-maintenance-panel.json"
+  ],
+  "files": [
+    {
+      "path": "registry/blocks/admin/admin-prompt-dashboard.tsx",
+      "content": "\"use client\";\n\n// Complete prompt admin dashboard: first/landing tab is the overview dashboard,\n// secondary tab covers the maintenance-like surface (per-resource create/edit\n// panels behind confirmation). For prompt-engine-m8 the danger ops are create/\n// edit/delete on blocks and templates, each behind `AlertDialog` confirmation.\n// Logic is a live dependency (@mano8/astro-prompt-m8/react + /hooks); this file\n// is only the shadcn skin, copied via the @mano8-prompt registry — edit per app.\nimport * as React from \"react\";\nimport { LayoutDashboard, PencilLine } from \"lucide-react\";\nimport {\n  PromptProvider,\n  RequireSuperuser,\n  type PromptContextValue\n} from \"@mano8/astro-prompt-m8/react\";\n\nimport { Tabs, TabsContent, TabsList, TabsTrigger } from \"@/components/ui/tabs\";\nimport {\n  PromptDashboardOverview,\n  type PromptDashboardOverviewLabels\n} from \"@/components/fa-prompt/prompt-dashboard-overview\";\nimport {\n  PromptMaintenancePanel,\n  type PromptMaintenanceLabels\n} from \"@/components/fa-prompt/prompt-maintenance-panel\";\n\nexport interface AdminPromptDashboardLabels {\n  dashboardTab: string;\n  maintenanceTab: string;\n  forbidden: string;\n  overview: Partial<PromptDashboardOverviewLabels>;\n  maintenance: Partial<PromptMaintenanceLabels>;\n}\n\nconst DEFAULT_LABELS: AdminPromptDashboardLabels = {\n  dashboardTab: \"Dashboard\",\n  maintenanceTab: \"Maintenance\",\n  forbidden: \"You need administrator access to view this page.\",\n  overview: {},\n  maintenance: {}\n};\n\nexport interface AdminPromptDashboardProps {\n  config?: React.ComponentProps<typeof PromptProvider>[\"config\"];\n  adapter?: PromptContextValue[\"adapter\"];\n  labels?: Partial<AdminPromptDashboardLabels>;\n}\n\nfunction AdminPromptShell({ labels }: { labels: AdminPromptDashboardLabels }) {\n  return (\n    <RequireSuperuser\n      fallback={\n        <div className=\"not-content mx-auto w-full max-w-md py-10 text-center text-sm text-muted-foreground\">\n          {labels.forbidden}\n        </div>\n      }\n    >\n      <Tabs defaultValue=\"dashboard\" className=\"not-content mx-auto w-full max-w-6xl space-y-4\">\n        <TabsList className=\"flex h-auto flex-wrap justify-start gap-1\">\n          <TabsTrigger value=\"dashboard\" className=\"gap-2\">\n            <LayoutDashboard className=\"size-4\" />\n            {labels.dashboardTab}\n          </TabsTrigger>\n          <TabsTrigger value=\"maintenance\" className=\"gap-2\">\n            <PencilLine className=\"size-4\" />\n            {labels.maintenanceTab}\n          </TabsTrigger>\n        </TabsList>\n        <TabsContent value=\"dashboard\">\n          <PromptDashboardOverview labels={labels.overview} />\n        </TabsContent>\n        <TabsContent value=\"maintenance\">\n          <PromptMaintenancePanel labels={labels.maintenance} />\n        </TabsContent>\n      </Tabs>\n    </RequireSuperuser>\n  );\n}\n\nexport default function AdminPromptDashboard({\n  config,\n  adapter,\n  labels\n}: AdminPromptDashboardProps) {\n  const resolved: AdminPromptDashboardLabels = {\n    ...DEFAULT_LABELS,\n    ...labels,\n    overview: { ...DEFAULT_LABELS.overview, ...labels?.overview },\n    maintenance: { ...DEFAULT_LABELS.maintenance, ...labels?.maintenance }\n  };\n  return (\n    <PromptProvider config={config} adapter={adapter}>\n      <AdminPromptShell labels={resolved} />\n    </PromptProvider>\n  );\n}",
+      "type": "registry:component",
+      "target": "components/fa-prompt/admin-prompt-dashboard.tsx"
+    }
+  ]
+}

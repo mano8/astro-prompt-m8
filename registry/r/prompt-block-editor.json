@@ -1,0 +1,20 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "prompt-block-editor",
+  "type": "registry:component",
+  "title": "Prompt Block Editor",
+  "description": "Shadcn skin for the package PromptBlockLibrary (CRUD for reusable prompt blocks), driven by usePromptBlocks. Requires @mano8/astro-prompt-m8 installed.",
+  "dependencies": [],
+  "registryDependencies": [
+    "card",
+    "button"
+  ],
+  "files": [
+    {
+      "path": "registry/blocks/library/prompt-block-editor.tsx",
+      "content": "\"use client\";\n\n// Generic prompt-block editor skin: wraps the live `PromptBlockLibrary` from\n// the package and re-exports it so consumers can `npx shadcn add` to keep a\n// local copy that imports the live logic from `@mano8/astro-prompt-m8/react`.\n// Edit freely per app — labels and styling can be overridden without forking\n// the headless contract.\nimport {\n  PromptBlockLibrary,\n  type PromptBlockLibraryLabels\n} from \"@mano8/astro-prompt-m8/react\";\n\nexport type { PromptBlockLibraryLabels };\nexport { PromptBlockLibrary };\n\nexport interface PromptBlockEditorProps {\n  labels?: Partial<PromptBlockLibraryLabels>;\n}\n\nexport default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {\n  return <PromptBlockLibrary labels={labels} />;\n}",
+      "type": "registry:component",
+      "target": "components/fa-prompt/prompt-block-editor.tsx"
+    }
+  ]
+}

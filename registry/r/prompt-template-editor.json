@@ -1,0 +1,20 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "prompt-template-editor",
+  "type": "registry:component",
+  "title": "Prompt Template Editor",
+  "description": "Shadcn skin for the package PromptTemplateEditor (create / edit / block ordering / compose preview), driven by usePromptTemplates + useComposePrompt. Requires @mano8/astro-prompt-m8 installed.",
+  "dependencies": [],
+  "registryDependencies": [
+    "card",
+    "button"
+  ],
+  "files": [
+    {
+      "path": "registry/blocks/editor/prompt-template-editor.tsx",
+      "content": "\"use client\";\n\n// Generic prompt-template editor skin: wraps the live `PromptTemplateEditor`\n// from the package and re-exports it so consumers can `npx shadcn add` to keep\n// a local copy that imports the live logic from `@mano8/astro-prompt-m8/react`.\nimport {\n  PromptTemplateEditor,\n  type PromptTemplateEditorLabels\n} from \"@mano8/astro-prompt-m8/react\";\n\nexport type { PromptTemplateEditorLabels };\nexport { PromptTemplateEditor };\n\nexport interface PromptTemplateEditorSkinProps {\n  labels?: Partial<PromptTemplateEditorLabels>;\n}\n\nexport default function PromptTemplateEditorSkin({\n  labels\n}: PromptTemplateEditorSkinProps) {\n  return <PromptTemplateEditor labels={labels} />;\n}",
+      "type": "registry:component",
+      "target": "components/fa-prompt/prompt-template-editor.tsx"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+/* Minimal neutral styles for the starter prompt routes when no app stylesheet is present.
+   Apps that ship Tailwind tokens (e.g. fa-ui-m8) override these via `views.layout`. */
+:where(.not-content) {
+  box-sizing: border-box;
+  color: var(--fa-prompt-fg, currentColor);
+}
+:where(.not-content) :where(button, input, select, textarea) {
+  font: inherit;
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "mano8-prompt",
+  "homepage": "https://github.com/mano8/astro-prompt-m8",
+  "items": [
+    {
+      "name": "prompt-block-editor",
+      "type": "registry:component",
+      "title": "Prompt Block Editor",
+      "description": "Shadcn skin for the package PromptBlockLibrary (CRUD for reusable prompt blocks), driven by usePromptBlocks. Requires @mano8/astro-prompt-m8 installed."
+    },
+    {
+      "name": "prompt-template-editor",
+      "type": "registry:component",
+      "title": "Prompt Template Editor",
+      "description": "Shadcn skin for the package PromptTemplateEditor (create / edit / block ordering / compose preview), driven by usePromptTemplates + useComposePrompt. Requires @mano8/astro-prompt-m8 installed."
+    },
+    {
+      "name": "prompt-dashboard-overview",
+      "type": "registry:component",
+      "title": "Prompt Admin Dashboard Overview",
+      "description": "Prompt-engine dashboard (stat cards + activity) driven by usePromptAdmin. Requires @mano8/astro-prompt-m8 installed."
+    },
+    {
+      "name": "prompt-maintenance-panel",
+      "type": "registry:component",
+      "title": "Prompt Admin Maintenance Panel",
+      "description": "Prompt admin danger zone (delete block / delete template), each behind a shadcn alert-dialog confirmation, driven by usePromptBlocks + usePromptTemplates. Requires @mano8/astro-prompt-m8 installed."
+    },
+    {
+      "name": "admin-prompt-dashboard",
+      "type": "registry:component",
+      "title": "Admin Prompt Dashboard",
+      "description": "Prompt admin view whose first/landing tab is the overview dashboard and destructive ops live in a guarded Maintenance tab; wraps the package's PromptProvider + RequireSuperuser. Requires @mano8/astro-prompt-m8 (and a fa-auth-m8 token adapter) installed."
+    }
+  ]
+}

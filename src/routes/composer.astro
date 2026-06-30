@@ -1,0 +1,12 @@
+---
+import { ComposerView } from "@mano8/astro-prompt-m8/default-ui";
+import "../scaffold/styles/prompt.css";
+
+const config = {
+  apiBase: import.meta.env.PUBLIC_FA_PROMPT_API_BASE,
+  apiPrefix: import.meta.env.PUBLIC_FA_PROMPT_API_PREFIX,
+  adminRole: import.meta.env.PUBLIC_FA_PROMPT_ADMIN_ROLE
+};
+const templateId = Number(Astro.url.searchParams.get("template")) || undefined;
+---
+<ComposerView client:load config={config} templateId={templateId} />
