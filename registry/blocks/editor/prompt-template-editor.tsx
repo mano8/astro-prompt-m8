@@ -5,7 +5,7 @@
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, FileText, MoreHorizontal, Plus, Wand2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, FileText, Plus, Wand2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { usePromptBlocks, usePromptTemplates, useComposePrompt } from "@mano8/astro-prompt-m8/hooks";
@@ -38,14 +38,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Form,
   FormControl,
@@ -281,6 +273,42 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
         ),
       },
       {
+        id: "actions",
+        header: t.actions,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <div className="flex min-w-48 flex-wrap gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => setActiveId(row.original.id)}
+            >
+              {t.blocks}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => startEdit(row.original)}
+            >
+              {t.edit}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs text-destructive hover:text-destructive"
+              onClick={() => setDeleting(row.original)}
+            >
+              {t.deleteLabel}
+            </Button>
+          </div>
+        ),
+      },
+      {
         accessorFn: (row) => (row.is_public ? "public" : "private"),
         id: "visibility",
         header: t.publicLabel,
@@ -300,35 +328,6 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
         accessorKey: "description",
         header: t.description,
         cell: ({ row }) => row.original.description ?? "",
-      },
-      {
-        id: "actions",
-        header: t.actions,
-        enableHiding: false,
-        cell: ({ row }) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <MoreHorizontal className="size-4" />
-                <span className="sr-only">{t.actions}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>{t.actions}</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => setActiveId(row.original.id)}>
-                {t.blocks}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => startEdit(row.original)}>{t.edit}</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={() => setDeleting(row.original)}
-              >
-                {t.deleteLabel}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
       },
     ],
     [t],
@@ -367,6 +366,71 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
           </Button>
         ),
       },
+      {
+        id: "actions",
+        header: t.actions,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <div className="flex min-w-40 flex-wrap gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="size-7 p-0"
+              disabled={!activeTemplate || row.index === 0 || templates.setPositionMutation.isPending}
+              onClick={() => {
+                if (!activeTemplate) return;
+                templates.setPositionMutation.mutate({
+                  templateId: activeTemplate.id,
+                  blockId: row.original.block_id,
+                  position: row.original.position - 1,
+                });
+              }}
+            >
+              <ArrowUp className="size-4" />
+              <span className="sr-only">{t.moveUp}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="size-7 p-0"
+              disabled={
+                !activeTemplate ||
+                row.index === activeTemplate.blocks.length - 1 ||
+                templates.setPositionMutation.isPending
+              }
+              onClick={() => {
+                if (!activeTemplate) return;
+                templates.setPositionMutation.mutate({
+                  templateId: activeTemplate.id,
+                  blockId: row.original.block_id,
+                  position: row.original.position + 1,
+                });
+              }}
+            >
+              <ArrowDown className="size-4" />
+              <span className="sr-only">{t.moveDown}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+              disabled={!activeTemplate || templates.removeBlockMutation.isPending}
+              onClick={() => {
+                if (!activeTemplate) return;
+                templates.removeBlockMutation.mutate({
+                  templateId: activeTemplate.id,
+                  blockId: row.original.block_id,
+                });
+              }}
+            >
+              {t.removeBlock}
+            </Button>
+          </div>
+        ),
+      },
       { accessorKey: "type", header: t.type },
       {
         accessorFn: (row) => (row.is_dynamic ? "dynamic" : "static"),
@@ -399,66 +463,6 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
           <p className="line-clamp-2 max-w-xl whitespace-pre-wrap text-muted-foreground">
             {row.original.content}
           </p>
-        ),
-      },
-      {
-        id: "actions",
-        header: t.actions,
-        enableHiding: false,
-        cell: ({ row }) => (
-          <div className="flex flex-wrap gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={!activeTemplate || row.index === 0 || templates.setPositionMutation.isPending}
-              onClick={() => {
-                if (!activeTemplate) return;
-                templates.setPositionMutation.mutate({
-                  templateId: activeTemplate.id,
-                  blockId: row.original.block_id,
-                  position: row.original.position - 1,
-                });
-              }}
-            >
-              <ArrowUp className="size-4" />
-              <span className="sr-only">{t.moveUp}</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={
-                !activeTemplate ||
-                row.index === activeTemplate.blocks.length - 1 ||
-                templates.setPositionMutation.isPending
-              }
-              onClick={() => {
-                if (!activeTemplate) return;
-                templates.setPositionMutation.mutate({
-                  templateId: activeTemplate.id,
-                  blockId: row.original.block_id,
-                  position: row.original.position + 1,
-                });
-              }}
-            >
-              <ArrowDown className="size-4" />
-              <span className="sr-only">{t.moveDown}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              disabled={!activeTemplate || templates.removeBlockMutation.isPending}
-              onClick={() => {
-                if (!activeTemplate) return;
-                templates.removeBlockMutation.mutate({
-                  templateId: activeTemplate.id,
-                  blockId: row.original.block_id,
-                });
-              }}
-            >
-              {t.removeBlock}
-            </Button>
-          </div>
         ),
       },
     ],
@@ -516,6 +520,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       ) : null}
 
       <DataTable
+        key="prompt-template-table-actions-v2"
         columns={templateColumns}
         data={templates.data?.data ?? []}
         searchColumn="name"
@@ -582,6 +587,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
                 </Button>
               </div>
               <DataTable
+                key={`prompt-template-blocks-actions-v2-${activeTemplate.id}`}
                 columns={blockColumns}
                 data={activeTemplate.blocks}
                 searchColumn="name"
@@ -599,7 +605,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? t.edit : t.create}</DialogTitle>
             <DialogDescription>{t.subtitle}</DialogDescription>
@@ -664,12 +670,12 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       </Dialog>
 
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{t.composeTitle}</DialogTitle>
             <DialogDescription>{activeTemplate?.name}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             {(activeTemplate?.blocks ?? []).filter((block) => block.is_dynamic).length === 0 ? (
               <p className="text-sm text-muted-foreground">{t.noDynamic}</p>
             ) : (
@@ -701,7 +707,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
             {composeMutation.data?.content ? (
               <div className="space-y-2">
                 <p className="text-sm font-medium">{t.composeResult}</p>
-                <pre className="max-h-72 overflow-auto rounded-md border bg-muted p-3 text-sm">
+                <pre className="max-h-72 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted p-3 text-sm">
                   {composeMutation.data.content}
                 </pre>
               </div>
