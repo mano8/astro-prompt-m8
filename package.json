@@ -71,7 +71,7 @@
     }
   },
   "devDependencies": {
-    "@mano8/astro-auth-m8": "file:../astro-auth-m8",
+    "@mano8/astro-auth-m8": "^0.1.0-alpha.1",
     "@tanstack/react-query": "^5.101.1",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
@@ -80,7 +80,7 @@
     "jsdom": "^29.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "typescript": "^5.8.0",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.9",
     "zod": "^4.0.0"
   },
@@ -91,5 +91,9 @@
     "contract": "prompt-engine-m8@0.0",
     "testedServiceVersion": "0.0.1",
     "serviceVersionRange": ">=0.0.1 <0.1.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "sharp@0.34.5": true
   }
 }

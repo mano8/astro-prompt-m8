@@ -101,18 +101,20 @@ export default function faPrompt(options: FaPromptAstroOptions = {}): AstroInteg
           }
         });
 
+        const starter = mode === "starter" && (options.views?.strategy ?? "package") !== "none";
+
         // prompt-engine-m8 only accepts fa-auth-m8-issued tokens, so the auth
         // adapter must be backed by fa-auth-m8 (official astro-auth-m8 plugin,
-        // or a custom adapter that obtains fa-auth-m8 tokens).
-        if (provider === "fa-auth-astro") {
+        // or a custom adapter that obtains fa-auth-m8 tokens). In headless mode
+        // consumers wire the adapter themselves, so integration order is not
+        // authoritative and should not warn.
+        if (starter && provider === "fa-auth-astro") {
           checkAuthOrder(config?.integrations, logger);
         } else if (provider === "custom" && !options.auth?.adapterImport) {
           logger?.warn(
             "auth.provider is \"custom\" but no auth.adapterImport was given; configure a fa-auth-m8-compatible PromptAuthAdapter via setPromptAuthAdapter()"
           );
         }
-
-        const starter = mode === "starter" && (options.views?.strategy ?? "package") !== "none";
         if (starter && provider === "none") {
           logger?.warn(
             "prompt starter routes are enabled but auth.provider is \"none\"; prompt-engine-m8 requires fa-auth-m8 authentication"
@@ -140,3 +142,4 @@ export default function faPrompt(options: FaPromptAstroOptions = {}): AstroInteg
 
 export { buildPromptRoutes } from "./runtime/routes.js";
 export type { PromptRouteFragments, BuiltPromptRoutes } from "./runtime/routes.js";
+

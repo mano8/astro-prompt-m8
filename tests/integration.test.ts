@@ -75,8 +75,7 @@ describe("faPrompt integration", () => {
     const define = updateConfig.mock.calls[0][0].vite.define;
     expect(define["import.meta.env.PUBLIC_FA_PROMPT_API_BASE"]).toBe(JSON.stringify("/prompt"));
     expect(define["import.meta.env.PUBLIC_FA_PROMPT_API_PREFIX"]).toBe(JSON.stringify("/fastapi"));
-    // fa-auth-astro is the default provider; with no integrations it warns.
-    expect(logger.warn).toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("uses explicit base values when supplied", () => {
@@ -124,6 +123,11 @@ describe("faPrompt integration", () => {
       }
     );
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("should be listed before"));
+  });
+
+  it("warns when starter routes use the official auth provider without the auth plugin", () => {
+    const { logger } = runSetup({ mode: "starter" }, { config: {} });
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("@mano8/astro-auth-m8"));
   });
 
   it("does not warn about order when prompt is absent from the list", () => {
