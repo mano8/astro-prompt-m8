@@ -107,7 +107,7 @@ export function PromptDashboardOverview({ labels }: PromptDashboardOverviewProps
 
   return (
     <div className="not-content space-y-6">
-      <div className="space-y-1">
+      <div className="space-y-1 pb-3">
         <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
         <p className="text-sm text-muted-foreground">{t.subtitle}</p>
       </div>

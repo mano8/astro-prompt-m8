@@ -87,6 +87,31 @@ const list = await blocks.list({ skip: 0, limit: 50 });
 const composed = await templates.compose(1, [{ id: 2, content: "Be terse." }]);
 ```
 
+## Dynamic block placeholders
+
+Dynamic prompt blocks should include the placeholder token
+`{{dynamic_content}}` in their authored block content. Compose fields collect the
+runtime replacement value for that token; they do not replace the authored block
+template itself.
+
+```ts
+import { DYNAMIC_CONTENT_PLACEHOLDER } from "@mano8/astro-prompt-m8/schemas";
+import { templates } from "@mano8/astro-prompt-m8/api";
+
+const authoredBlock = `Use this source text:\n${DYNAMIC_CONTENT_PLACEHOLDER}\nReturn bullets.`;
+
+const composed = await templates.compose(1, [
+  { id: 2, content: "Summarize the release notes." }
+]);
+```
+
+The compose payload shape remains `{ id, content }[]`, where `id` is the prompt
+block ID and `content` is the replacement value. `prompt-engine-m8` inserts that
+value wherever `{{dynamic_content}}` appears in a dynamic block. Dynamic blocks
+without the placeholder still use the compatibility path: the replacement value
+renders as the whole dynamic block. Prefer the placeholder for new authored
+dynamic blocks so surrounding instructions remain part of the final prompt.
+
 ## Security model
 
 - Access tokens are delegated to the auth adapter and **never persisted** here.

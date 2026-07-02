@@ -1,6 +1,10 @@
 import * as React from "react";
 import { usePromptBlocks } from "../hooks/usePromptBlocks.js";
-import type { PromptBlockPublic } from "../schemas.js";
+import {
+  hasDynamicContentPlaceholder,
+  insertDynamicContentPlaceholder,
+  type PromptBlockPublic
+} from "../schemas.js";
 
 export interface PromptBlockLibraryLabels {
   title: string;
@@ -24,6 +28,8 @@ export interface PromptBlockLibraryLabels {
   publicNo: string;
   dynamicLabel: string;
   publicLabel: string;
+  insertPlaceholder: string;
+  placeholderRequired: string;
   description: string;
   blockTypeRole: string;
   blockTypeTask: string;
@@ -55,6 +61,8 @@ const DEFAULT_LABELS: PromptBlockLibraryLabels = {
   publicNo: "Private",
   dynamicLabel: "Dynamic",
   publicLabel: "Public",
+  insertPlaceholder: "Insert placeholder",
+  placeholderRequired: "Dynamic blocks should include {{dynamic_content}}.",
   description: "Description",
   blockTypeRole: "Role",
   blockTypeTask: "Task",
@@ -121,6 +129,8 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
     usePromptBlocks();
   const [draft, setDraft] = React.useState<DraftState | null>(null);
   const [editingId, setEditingId] = React.useState<number | null>(null);
+  const [draftError, setDraftError] = React.useState<string | null>(null);
+  const contentRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   React.useEffect(() => {
     void refresh();
@@ -128,6 +138,7 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
 
   const startEdit = (block: PromptBlockPublic) => {
     setEditingId(block.id);
+    setDraftError(null);
     setDraft({
       id: block.id,
       name: block.name,
@@ -141,6 +152,10 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
 
   const saveDraft = async () => {
     if (!draft) return;
+    if (draft.is_dynamic && !hasDynamicContentPlaceholder(draft.content)) {
+      setDraftError(t.placeholderRequired);
+      return;
+    }
     const body = {
       name: draft.name,
       description: draft.description || null,
@@ -155,7 +170,21 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
       await createMutation.mutateAsync(body);
     }
     setDraft(null);
+    setDraftError(null);
     setEditingId(null);
+  };
+
+  const insertPlaceholder = () => {
+    if (!draft) return;
+    const textarea = contentRef.current;
+    const content = insertDynamicContentPlaceholder(
+      draft.content,
+      textarea?.selectionStart,
+      textarea?.selectionEnd
+    );
+    setDraft({ ...draft, content });
+    setDraftError(null);
+    requestAnimationFrame(() => textarea?.focus());
   };
 
   const removeBlock = async (id: number) => {
@@ -175,6 +204,7 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
           onClick={() => {
             setEditingId(null);
+            setDraftError(null);
             setDraft({ ...EMPTY_DRAFT });
           }}
         >
@@ -217,6 +247,7 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
           <label className="block space-y-1 text-sm">
             <span className="font-medium">{t.content}</span>
             <textarea
+              ref={contentRef}
               className="w-full rounded-md border bg-background px-3 py-2"
               rows={4}
               value={draft.content}
@@ -224,6 +255,22 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
               required
             />
           </label>
+          {draft.is_dynamic ? (
+            <div className="space-y-1">
+              <button
+                type="button"
+                className="rounded-md border px-3 py-1 text-xs font-medium"
+                onClick={insertPlaceholder}
+              >
+                {t.insertPlaceholder}
+              </button>
+              {draftError ? (
+                <p role="alert" className="text-xs text-destructive">
+                  {draftError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-4">
             <label className="block space-y-1 text-sm">
               <span className="font-medium">{t.type}</span>
@@ -245,7 +292,10 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
               <input
                 type="checkbox"
                 checked={draft.is_dynamic}
-                onChange={(e) => setDraft({ ...draft, is_dynamic: e.target.checked })}
+                onChange={(e) => {
+                  setDraft({ ...draft, is_dynamic: e.target.checked });
+                  setDraftError(null);
+                }}
               />
               <span className="font-medium">{t.dynamicLabel}</span>
             </label>
@@ -271,6 +321,7 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
               className="rounded-md border px-4 py-2 text-sm font-medium"
               onClick={() => {
                 setDraft(null);
+                setDraftError(null);
                 setEditingId(null);
               }}
             >

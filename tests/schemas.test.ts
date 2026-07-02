@@ -107,6 +107,24 @@ describe("template schemas", () => {
 });
 
 describe("compose schemas", () => {
+  it("exposes the dynamic content placeholder contract", () => {
+    expect(s.DYNAMIC_CONTENT_PLACEHOLDER).toBe("{{dynamic_content}}");
+    expect(s.hasDynamicContentPlaceholder("Before {{dynamic_content}} after")).toBe(true);
+    expect(s.hasDynamicContentPlaceholder("Before dynamic content after")).toBe(false);
+  });
+
+  it("inserts the dynamic content placeholder without changing other text", () => {
+    expect(s.insertDynamicContentPlaceholder("")).toBe("{{dynamic_content}}");
+    expect(s.insertDynamicContentPlaceholder("Before ")).toBe("Before {{dynamic_content}}");
+    expect(s.insertDynamicContentPlaceholder("Before after", 7, 7)).toBe(
+      "Before {{dynamic_content}}after"
+    );
+    expect(s.insertDynamicContentPlaceholder("Before replace after", 7, 14)).toBe(
+      "Before {{dynamic_content}} after"
+    );
+    expect(s.insertDynamicContentPlaceholder("content", -5, 50)).toBe("{{dynamic_content}}");
+  });
+
   it("validates dynamic blocks and composed output", () => {
     expect(s.DynamicBlockSchema.parse({ id: 1, content: "c" }).id).toBe(1);
     expect(() => s.DynamicBlockSchema.parse({ id: 0, content: "c" })).toThrow();

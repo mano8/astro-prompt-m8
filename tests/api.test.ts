@@ -150,14 +150,19 @@ describe("templates API", () => {
     expect(await templates.getTemplateBlocks(1)).toEqual([]);
   });
 
-  it("compose parses a data ComposedPrompt and falls back to empty content", async () => {
+  it("compose posts dynamic replacement values and parses a ComposedPrompt", async () => {
     requestMock.mockResolvedValueOnce({ success: true, data: { content: "x" } });
-    expect((await templates.composeTemplate(4, [{ id: 1, content: "c" }])).content).toBe("x");
+    expect((await templates.composeTemplate(4, [{ id: 1, content: "replacement" }])).content).toBe(
+      "x"
+    );
     expect(lastOptions()).toMatchObject({
       method: "POST",
       path: "/prompt-template/compose/4/",
-      body: [{ id: 1, content: "c" }]
+      body: [{ id: 1, content: "replacement" }]
     });
+  });
+
+  it("compose falls back to empty content when the service has no data", async () => {
     requestMock.mockResolvedValueOnce({ success: false, msg: "no data" });
     expect((await templates.composeTemplate(4)).content).toBe("");
   });

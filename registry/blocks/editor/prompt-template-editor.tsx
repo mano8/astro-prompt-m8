@@ -81,6 +81,8 @@ export interface PromptTemplateEditorLabels {
   composeTitle: string;
   composeResult: string;
   dynamicFor: string;
+  dynamicPlaceholder: string;
+  missingDynamic: string;
   noDynamic: string;
   loading: string;
   empty: string;
@@ -118,6 +120,8 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   composeTitle: "Compose template",
   composeResult: "Composed prompt",
   dynamicFor: "Dynamic content for",
+  dynamicPlaceholder: "Replacement value",
+  missingDynamic: "Enter every dynamic replacement value.",
   noDynamic: "This template has no dynamic blocks.",
   loading: "Loading...",
   empty: "No prompt templates.",
@@ -223,13 +227,19 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
 
   const runCompose = async () => {
     if (!activeTemplate) return;
+    const dynamicBlocks = activeTemplate.blocks.filter((block) => block.is_dynamic);
+    const missing = dynamicBlocks.some(
+      (block) => (dynamicFields[block.block_id] ?? "").trim() === ""
+    );
+    if (missing) {
+      setComposeError(t.missingDynamic);
+      return;
+    }
     try {
       setComposeError(null);
       await compose(
         activeTemplate.id,
-        activeTemplate.blocks
-          .filter((block) => block.is_dynamic && (dynamicFields[block.block_id] ?? "").trim() !== "")
-          .map((block) => ({
+        dynamicBlocks.map((block) => ({
             id: block.block_id,
             content: dynamicFields[block.block_id] ?? "",
           })),
@@ -499,7 +509,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
 
   return (
     <section className="not-content space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-2">
+      <div className="flex flex-wrap items-end justify-between gap-2 pb-3">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
           <p className="text-sm text-muted-foreground">{t.subtitle}</p>
@@ -688,6 +698,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
                     </label>
                     <Textarea
                       rows={3}
+                      placeholder={t.dynamicPlaceholder}
                       value={dynamicFields[block.block_id] ?? ""}
                       onChange={(event) =>
                         setDynamicFields((current) => ({
@@ -696,6 +707,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
                         }))
                       }
                     />
+                    <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                      {block.content}
+                    </pre>
                   </div>
                 ))
             )}

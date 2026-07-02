@@ -32,6 +32,7 @@ export interface PromptTemplateEditorLabels {
   composingError: string;
   dynamicFor: string;
   dynamicPlaceholder: string;
+  missingDynamic: string;
   noDynamic: string;
 }
 
@@ -62,7 +63,8 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   composing: "Composing…",
   composingError: "Could not compose template.",
   dynamicFor: "Dynamic content for",
-  dynamicPlaceholder: "Optional dynamic content for this block…",
+  dynamicPlaceholder: "Replacement value",
+  missingDynamic: "Enter every dynamic replacement value.",
   noDynamic: "This template has no dynamic blocks."
 };
 
@@ -363,14 +365,20 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
                       }
                       fields={composerDynamic}
                       onCompose={async () => {
+                        const dynamicBlocks = tpl.blocks.filter((block) => block.is_dynamic);
+                        const missing = dynamicBlocks.some(
+                          (block) => (composerDynamic[block.block_id] ?? "").trim() === ""
+                        );
+                        if (missing) {
+                          setComposeError(t.missingDynamic);
+                          return;
+                        }
                         try {
                           await compose(
                             tpl.id,
-                            tpl.blocks
-                              .filter((b) => b.is_dynamic && (composerDynamic[b.block_id] ?? "").trim() !== "")
-                              .map((b) => ({
-                                id: b.block_id,
-                                content: composerDynamic[b.block_id] ?? ""
+                            dynamicBlocks.map((block) => ({
+                                id: block.block_id,
+                                content: composerDynamic[block.block_id] ?? ""
                               }))
                           );
                         } catch {
@@ -399,6 +407,7 @@ type InlineBlock = {
   block_id: number;
   is_dynamic: boolean;
   name: string;
+  content: string;
 };
 
 function ComposeInline({
@@ -456,6 +465,9 @@ function ComposeInline({
               placeholder={t.dynamicPlaceholder}
               onChange={(e) => onField(b.block_id, e.target.value)}
             />
+            <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+              {b.content}
+            </pre>
           </label>
         ))
       )}

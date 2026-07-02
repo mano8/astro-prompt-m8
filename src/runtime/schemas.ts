@@ -146,6 +146,22 @@ export type PromptTemplatesPublic = z.infer<typeof PromptTemplatesPublicSchema>;
 // Compose
 // ---------------------------------------------------------------------------
 
+export const DYNAMIC_CONTENT_PLACEHOLDER = "{{dynamic_content}}";
+
+export function hasDynamicContentPlaceholder(content: string): boolean {
+  return content.includes(DYNAMIC_CONTENT_PLACEHOLDER);
+}
+
+export function insertDynamicContentPlaceholder(
+  content: string,
+  selectionStart: number = content.length,
+  selectionEnd: number = selectionStart
+): string {
+  const start = Math.max(0, Math.min(selectionStart, content.length));
+  const end = Math.max(start, Math.min(selectionEnd, content.length));
+  return `${content.slice(0, start)}${DYNAMIC_CONTENT_PLACEHOLDER}${content.slice(end)}`;
+}
+
 export const DynamicBlockSchema = z
   .object({
     id: z.number().int().positive(),

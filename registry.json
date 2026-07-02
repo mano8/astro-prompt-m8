@@ -89,30 +89,12 @@
       ]
     },
     {
-      "name": "prompt-maintenance-panel",
-      "type": "registry:component",
-      "title": "Prompt Admin Maintenance Panel",
-      "description": "Prompt admin danger zone (delete block / delete template), each behind a shadcn alert-dialog confirmation, driven by usePromptBlocks + usePromptTemplates. Requires @mano8/astro-prompt-m8 installed.",
-      "dependencies": ["lucide-react"],
-      "registryDependencies": ["card", "button", "alert-dialog"],
-      "files": [
-        {
-          "path": "registry/blocks/admin/prompt-maintenance-panel.tsx",
-          "type": "registry:component",
-          "target": "components/fa-prompt/prompt-maintenance-panel.tsx"
-        }
-      ]
-    },
-    {
       "name": "admin-prompt-dashboard",
       "type": "registry:component",
       "title": "Admin Prompt Dashboard",
-      "description": "Prompt admin view whose first/landing tab is the overview dashboard and destructive ops live in a guarded Maintenance tab; wraps the package's PromptProvider + RequireSuperuser. Requires @mano8/astro-prompt-m8 (and a fa-auth-m8 token adapter) installed.",
-      "dependencies": ["lucide-react"],
+      "description": "Prompt admin overview dashboard; wraps the package's PromptProvider + RequireSuperuser. Requires @mano8/astro-prompt-m8 (and a fa-auth-m8 token adapter) installed.",
       "registryDependencies": [
-        "tabs",
-        "./node_modules/@mano8/astro-prompt-m8/registry/r/prompt-dashboard-overview.json",
-        "./node_modules/@mano8/astro-prompt-m8/registry/r/prompt-maintenance-panel.json"
+        "./node_modules/@mano8/astro-prompt-m8/registry/r/prompt-dashboard-overview.json"
       ],
       "files": [
         {

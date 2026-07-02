@@ -9,7 +9,11 @@ import { ArrowUpDown, Plus } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { usePromptBlocks } from "@mano8/astro-prompt-m8/hooks";
-import type { PromptBlockPublic } from "@mano8/astro-prompt-m8/schemas";
+import {
+  hasDynamicContentPlaceholder,
+  insertDynamicContentPlaceholder,
+  type PromptBlockPublic,
+} from "@mano8/astro-prompt-m8/schemas";
 
 import { DataTable, type DataTableFilter } from "@/components/fa-prompt/data-table";
 import {
@@ -69,6 +73,8 @@ export interface PromptBlockEditorLabels {
   type: string;
   dynamicLabel: string;
   publicLabel: string;
+  insertPlaceholder: string;
+  placeholderRequired: string;
   loading: string;
   empty: string;
   error: string;
@@ -97,6 +103,8 @@ const DEFAULT_LABELS: PromptBlockEditorLabels = {
   type: "Type",
   dynamicLabel: "Dynamic",
   publicLabel: "Public",
+  insertPlaceholder: "Insert placeholder",
+  placeholderRequired: "Dynamic blocks should include {{dynamic_content}}.",
   loading: "Loading...",
   empty: "No prompt blocks.",
   error: "Could not load prompt blocks.",
@@ -109,14 +117,24 @@ const DEFAULT_LABELS: PromptBlockEditorLabels = {
 };
 
 const blockTypes = ["role", "task", "context", "instruction", "example", "format"] as const;
-const blockFormSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  description: z.string().trim().max(1000).optional(),
-  content: z.string().trim().min(1).max(5000),
-  type: z.enum(blockTypes),
-  is_dynamic: z.boolean(),
-  is_public: z.boolean(),
-});
+const blockFormSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(1000).optional(),
+    content: z.string().trim().min(1).max(5000),
+    type: z.enum(blockTypes),
+    is_dynamic: z.boolean(),
+    is_public: z.boolean(),
+  })
+  .superRefine((value, context) => {
+    if (value.is_dynamic && !hasDynamicContentPlaceholder(value.content)) {
+      context.addIssue({
+        code: "custom",
+        path: ["content"],
+        message: DEFAULT_LABELS.placeholderRequired,
+      });
+    }
+  });
 type BlockFormValues = z.infer<typeof blockFormSchema>;
 
 const emptyValues: BlockFormValues = {
@@ -148,6 +166,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     resolver: zodResolver(blockFormSchema),
     defaultValues: emptyValues,
   });
+  const isDynamic = form.watch("is_dynamic");
 
   React.useEffect(() => {
     void refresh();
@@ -391,6 +410,22 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
                     <FormControl>
                       <Textarea rows={6} {...field} />
                     </FormControl>
+                    {isDynamic ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          form.setValue(
+                            "content",
+                            insertDynamicContentPlaceholder(form.getValues("content")),
+                            { shouldDirty: true, shouldValidate: true },
+                          );
+                        }}
+                      >
+                        {t.insertPlaceholder}
+                      </Button>
+                    ) : null}
                     <FormMessage />
                   </FormItem>
                 )}

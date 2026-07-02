@@ -21,6 +21,7 @@ export interface PromptComposerLabels {
   composingError: string;
   dynamicFor: string;
   dynamicPlaceholder: string;
+  missingDynamic: string;
   empty: string;
   error: string;
   noBlocks: string;
@@ -36,7 +37,8 @@ const DEFAULT_LABELS: PromptComposerLabels = {
   composing: "Composing…",
   composingError: "Could not compose prompt.",
   dynamicFor: "Dynamic content for",
-  dynamicPlaceholder: "Enter dynamic content for this block…",
+  dynamicPlaceholder: "Replacement value",
+  missingDynamic: "Enter every dynamic replacement value.",
   empty: "No dynamic blocks.",
   error: "Could not load templates.",
   noBlocks: "This template has no blocks yet."
@@ -55,12 +57,16 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
   const templateBlocks = usePromptTemplateBlocks(selectedId);
   const { compose, composeMutation } = useComposePrompt();
   const [dynamic, setDynamic] = React.useState<Record<number, string>>({});
+  const [dynamicError, setDynamicError] = React.useState<string | null>(null);
 
   const selected = template.data ?? null;
   const blocks = templateBlocks.blocks ?? [];
 
   React.useEffect(() => {
-    if (selectedId !== undefined) setDynamic({});
+    if (selectedId !== undefined) {
+      setDynamic({});
+      setDynamicError(null);
+    }
   }, [selectedId]);
 
   const dynamicBlocks = blocks.filter((b) => b.is_dynamic);
@@ -123,9 +129,17 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
                     }))
                   }
                 />
+                <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  {block.content}
+                </pre>
               </div>
             ))
           )}
+          {dynamicError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {dynamicError}
+            </p>
+          ) : null}
 
           <button
             type="button"
@@ -133,11 +147,20 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
             disabled={composeMutation.isPending || !selectedId}
             onClick={() => {
               if (selectedId === undefined) return;
+              const missing = dynamicBlocks.some(
+                (block) => (dynamic[block.block_id] ?? "").trim() === ""
+              );
+              if (missing) {
+                setDynamicError(t.missingDynamic);
+                return;
+              }
+              setDynamicError(null);
               void compose(
                 selectedId,
-                Object.entries(dynamic)
-                  .filter(([, v]) => v.trim() !== "")
-                  .map(([id, content]) => ({ id: Number(id), content }))
+                dynamicBlocks.map((block) => ({
+                  id: block.block_id,
+                  content: dynamic[block.block_id] ?? ""
+                }))
               );
             }}
           >

@@ -28,16 +28,10 @@
       "description": "Prompt-engine dashboard (stat cards + activity) driven by usePromptAdmin. Requires @mano8/astro-prompt-m8 installed."
     },
     {
-      "name": "prompt-maintenance-panel",
-      "type": "registry:component",
-      "title": "Prompt Admin Maintenance Panel",
-      "description": "Prompt admin danger zone (delete block / delete template), each behind a shadcn alert-dialog confirmation, driven by usePromptBlocks + usePromptTemplates. Requires @mano8/astro-prompt-m8 installed."
-    },
-    {
       "name": "admin-prompt-dashboard",
       "type": "registry:component",
       "title": "Admin Prompt Dashboard",
-      "description": "Prompt admin view whose first/landing tab is the overview dashboard and destructive ops live in a guarded Maintenance tab; wraps the package's PromptProvider + RequireSuperuser. Requires @mano8/astro-prompt-m8 (and a fa-auth-m8 token adapter) installed."
+      "description": "Prompt admin overview dashboard; wraps the package's PromptProvider + RequireSuperuser. Requires @mano8/astro-prompt-m8 (and a fa-auth-m8 token adapter) installed."
     }
   ]
 }

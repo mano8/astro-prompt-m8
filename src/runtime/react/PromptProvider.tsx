@@ -47,12 +47,10 @@ export function PromptProvider({
   config?: Partial<PromptRuntimeConfig>;
   adapter?: PromptAuthAdapter;
 }) {
+  if (config) configurePrompt(config);
+
   const resolved = adapter ?? getPromptAuthAdapter();
   const [authState, setAuthState] = useState(() => readAdapterUser(resolved));
-
-  useEffect(() => {
-    if (config) configurePrompt(config);
-  }, [config]);
 
   useEffect(() => {
     if (!resolved.getUser) {
