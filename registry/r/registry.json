@@ -7,7 +7,7 @@
       "name": "data-table",
       "type": "registry:component",
       "title": "Data Table",
-      "description": "Generic shadcn data table (search, filters, sorting, pagination, row selection, and column visibility) built on @tanstack/react-table."
+      "description": "Controlled shadcn data table (search, faceted filters, sorting, pagination, row selection, and column visibility) built on @tanstack/react-table."
     },
     {
       "name": "prompt-block-editor",

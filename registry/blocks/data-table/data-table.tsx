@@ -1,38 +1,17 @@
 "use client";
 
-// Generic shadcn data table for prompt registry skins. It supports global search,
-// column filters, sorting, pagination, row selection, and column visibility.
 import * as React from "react";
 import {
   type ColumnDef,
-  type ColumnFiltersState,
   type RowSelectionState,
   type SortingState,
   type VisibilityState,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronDown } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -42,131 +21,161 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import {
+  DataTablePagination,
+  type DataTablePaginationLabels,
+} from "./data-table-pagination";
+import {
+  DataTableServerToolbar,
+  type DataTableFilterOptions,
+  type DataTableServerToolbarLabels,
+} from "./data-table-server-toolbar";
+
+export type DataTableSortDirection = "asc" | "desc";
+
 export interface DataTableFilter {
-  columnId: string;
+  columnId?: string;
   label: string;
-  allLabel: string;
+  allLabel?: string;
   options: { label: string; value: string }[];
+  multi?: boolean;
 }
 
-export interface DataTableProps<TData, TValue> {
+export interface DataTableServerLabels {
+  loading: string;
+  empty: string;
+  toolbar: Partial<DataTableServerToolbarLabels>;
+  pagination: Partial<DataTablePaginationLabels>;
+}
+
+const DEFAULT_LABELS: DataTableServerLabels = {
+  loading: "Loading...",
+  empty: "No results.",
+  toolbar: {},
+  pagination: {},
+};
+
+export interface DataTableServerProps<TData, TValue, TFilter extends string = string> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  searchColumn?: string;
-  searchPlaceholder?: string;
-  filters?: DataTableFilter[];
-  pageSize?: number;
-  emptyMessage?: string;
-  columnsLabel?: string;
-  selectedLabel?: (selected: number, total: number) => string;
+  loading?: boolean;
+  addButton?: React.ReactNode;
+  rowCount: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  visibility?: VisibilityState;
+  sortBy?: string;
+  sortDir?: DataTableSortDirection;
+  onSortChange?: (sortBy?: string, sortDir?: DataTableSortDirection) => void;
+  q?: string;
+  onSearchChange?: (q: string) => void;
+  f?: TFilter | "";
+  onFilterChange?: (f: TFilter | "") => void;
+  filterOptions?: DataTableFilterOptions;
+  pageSizeOptions?: number[];
+  labels?: Partial<DataTableServerLabels>;
 }
 
-export function DataTable<TData, TValue>({
+export function DataTableServer<TData, TValue, TFilter extends string = string>({
   columns,
   data,
-  searchColumn,
-  searchPlaceholder = "Search...",
-  filters = [],
-  pageSize = 10,
-  emptyMessage = "No results.",
-  columnsLabel = "Columns",
-  selectedLabel = (selected, total) => `${selected} of ${total} selected`,
-}: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  visibility = {},
+  loading = false,
+  addButton,
+  rowCount,
+  page,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  sortBy,
+  sortDir,
+  onSortChange,
+  q,
+  onSearchChange,
+  f,
+  onFilterChange,
+  filterOptions,
+  pageSizeOptions,
+  labels,
+}: DataTableServerProps<TData, TValue, TFilter>) {
+  const t = { ...DEFAULT_LABELS, ...labels };
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<VisibilityState>(visibility);
+
+  const sortingState: SortingState = React.useMemo(
+    () => (sortBy && sortDir ? [{ id: sortBy, desc: sortDir === "desc" }] : []),
+    [sortBy, sortDir],
+  );
+  const pageIndex = Math.max(0, page - 1);
+  const pageCount = Math.max(1, Math.ceil(rowCount / Math.max(1, pageSize)));
+  const paginationState = React.useMemo(
+    () => ({ pageIndex, pageSize }),
+    [pageIndex, pageSize],
+  );
 
   const table = useReactTable({
     data,
     columns,
+    state: {
+      sorting: sortingState,
+      columnVisibility,
+      rowSelection,
+      pagination: paginationState,
+    },
+    manualPagination: true,
+    manualSorting: Boolean(onSortChange),
+    manualFiltering: Boolean(onSearchChange || onFilterChange),
+    pageCount,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
+    autoResetPageIndex: false,
+    autoResetExpanded: false,
+    onPaginationChange: (updater) => {
+      const next = typeof updater === "function" ? updater(paginationState) : updater;
+      if (next.pageIndex !== paginationState.pageIndex) {
+        onPageChange(next.pageIndex + 1);
+      }
+      if (next.pageSize !== paginationState.pageSize) {
+        onPageSizeChange(next.pageSize);
+      }
+    },
+    onSortingChange: (updater) => {
+      if (!onSortChange) return;
+      const next = typeof updater === "function" ? updater(sortingState) : updater;
+      const first = next[0];
+      onSortChange(first?.id, first ? (first.desc ? "desc" : "asc") : undefined);
+    },
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    initialState: { pagination: { pageSize } },
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
   });
 
-  const search = searchColumn ? table.getColumn(searchColumn) : undefined;
-
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center">
-        {search ? (
-          <Input
-            value={(search.getFilterValue() as string) ?? ""}
-            onChange={(event) => search.setFilterValue(event.target.value)}
-            placeholder={searchPlaceholder}
-            className="md:max-w-sm"
-            aria-label={searchPlaceholder}
-          />
-        ) : null}
-
-        <div className="flex flex-1 flex-wrap gap-2">
-          {filters.map((filter) => {
-            const column = table.getColumn(filter.columnId);
-            if (!column) return null;
-            return (
-              <Select
-                key={filter.columnId}
-                value={(column.getFilterValue() as string | undefined) ?? "__all"}
-                onValueChange={(value) => {
-                  column.setFilterValue(value === "__all" ? undefined : value);
-                }}
-              >
-                <SelectTrigger className="w-[180px]" aria-label={filter.label}>
-                  <SelectValue placeholder={filter.label} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all">{filter.allLabel}</SelectItem>
-                  {filter.options.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            );
-          })}
-        </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
-              {columnsLabel}
-              <ChevronDown className="ml-2 size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className="capitalize"
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) => column.toggleVisibility(Boolean(value))}
-                >
-                  {column.id}
-                </DropdownMenuCheckboxItem>
-              ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
+    <div className="space-y-4">
+      <DataTableServerToolbar
+        table={table}
+        addButton={addButton}
+        q={q}
+        onSearchChange={onSearchChange}
+        f={f}
+        onFilterChange={onFilterChange}
+        filterOptions={filterOptions}
+        labels={t.toolbar}
+      />
+      <DataTablePagination
+        table={table}
+        labels={t.pagination}
+        pageSizeOptions={pageSizeOptions}
+      />
       <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} colSpan={header.colSpan}>
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -176,7 +185,13 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.length ? (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  {t.loading}
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                   {row.getVisibleCells().map((cell) => (
@@ -189,45 +204,21 @@ export function DataTable<TData, TValue>({
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  {emptyMessage}
+                  {t.empty}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </div>
-
-      <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <span>
-          {selectedLabel(
-            table.getFilteredSelectedRowModel().rows.length,
-            table.getFilteredRowModel().rows.length,
-          )}
-        </span>
-        {table.getPageCount() > 1 ? (
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              Previous
-            </Button>
-            <span>
-              Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              Next
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      <DataTablePagination
+        table={table}
+        labels={t.pagination}
+        pageSizeOptions={pageSizeOptions}
+      />
     </div>
   );
 }
+
+export const DataTable = DataTableServer;
+export type { DataTableFilterOptions };

@@ -71,6 +71,12 @@ describe("blocks API", () => {
     expect(lastOptions().query).toEqual({ skip: 0, limit: 100 });
   });
 
+  it("list translates page params into skip/limit query", async () => {
+    requestMock.mockResolvedValueOnce({ data: [], count: 0 });
+    await blocks.listBlocks({ page: 3, pageSize: 20 });
+    expect(lastOptions().query).toEqual({ skip: 40, limit: 20 });
+  });
+
   it("getBlock returns the data shape when success", async () => {
     requestMock.mockResolvedValueOnce({ success: true, data: validBlock() });
     expect((await blocks.getBlock(7)).id).toBe(1);
@@ -127,6 +133,12 @@ describe("templates API", () => {
     requestMock.mockResolvedValueOnce({ data: [], count: 0 });
     await templates.listTemplates();
     expect(lastOptions().query).toEqual({ skip: 0, limit: 100 });
+  });
+
+  it("list translates page params into skip/limit query", async () => {
+    requestMock.mockResolvedValueOnce({ data: [], count: 0 });
+    await templates.listTemplates({ page: 4, pageSize: 10 });
+    expect(lastOptions().query).toEqual({ skip: 30, limit: 10 });
   });
 
   it("getTemplate returns the parsed template", async () => {

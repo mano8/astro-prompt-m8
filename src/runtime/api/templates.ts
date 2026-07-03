@@ -1,4 +1,5 @@
 import { request } from "../client.js";
+import { listParamsToOffset } from "../listParams.js";
 import { unwrap, unwrapOrNull } from "./blocks.js";
 import {
   ComposedPromptSchema,
@@ -24,10 +25,14 @@ const ModelOrMessage = ResponseModelBaseSchema.or(ResponseMessageSchema);
 export async function listTemplates(
   params: PromptTemplateListParams = {}
 ): Promise<PromptTemplatesPublic> {
+  const offset =
+    params.page !== undefined && params.pageSize !== undefined
+      ? listParamsToOffset({ page: params.page, pageSize: params.pageSize })
+      : { skip: params.skip ?? 0, limit: params.limit ?? 100 };
   return request({
     method: "GET",
     path: "/prompt-template/",
-    query: { skip: params.skip ?? 0, limit: params.limit ?? 100 },
+    query: offset,
     schema: PromptTemplatesPublicSchema,
     auth: true
   });

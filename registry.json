@@ -7,14 +7,49 @@
       "name": "data-table",
       "type": "registry:component",
       "title": "Data Table",
-      "description": "Generic shadcn data table (search, filters, sorting, pagination, row selection, and column visibility) built on @tanstack/react-table.",
+      "description": "Controlled shadcn data table (search, faceted filters, sorting, pagination, row selection, and column visibility) built on @tanstack/react-table.",
       "dependencies": ["@tanstack/react-table", "lucide-react"],
-      "registryDependencies": ["table", "button", "input", "select", "dropdown-menu"],
+      "registryDependencies": [
+        "badge",
+        "button",
+        "command",
+        "dropdown-menu",
+        "input",
+        "popover",
+        "select",
+        "separator",
+        "table"
+      ],
       "files": [
         {
           "path": "registry/blocks/data-table/data-table.tsx",
           "type": "registry:component",
           "target": "components/fa-prompt/data-table.tsx"
+        },
+        {
+          "path": "registry/blocks/data-table/data-table-column-header.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/data-table-column-header.tsx"
+        },
+        {
+          "path": "registry/blocks/data-table/data-table-pagination.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/data-table-pagination.tsx"
+        },
+        {
+          "path": "registry/blocks/data-table/data-table-server-faceted-filter.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/data-table-server-faceted-filter.tsx"
+        },
+        {
+          "path": "registry/blocks/data-table/data-table-server-toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/data-table-server-toolbar.tsx"
+        },
+        {
+          "path": "registry/blocks/data-table/data-table-view-options.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/data-table-view-options.tsx"
         }
       ]
     },

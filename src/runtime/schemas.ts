@@ -247,11 +247,27 @@ export type UsersActivity = z.infer<typeof UsersActivitySchema>;
 export type PromptBlockListParams = {
   skip?: number;
   limit?: number;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  csrc?: string;
+  vsrc?: string;
+  f?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 };
 
 export type PromptTemplateListParams = {
   skip?: number;
   limit?: number;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  csrc?: string;
+  vsrc?: string;
+  f?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 };
 
 export type CategoryListParams = {

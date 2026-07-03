@@ -5,7 +5,7 @@
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Copy, FileText, Plus, Wand2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, FileText, Plus, Wand2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { usePromptBlocks, usePromptTemplates, useComposePrompt } from "@mano8/astro-prompt-m8/hooks";
@@ -15,7 +15,12 @@ import type {
   TemplateBlockPublic,
 } from "@mano8/astro-prompt-m8/schemas";
 
-import { DataTable, type DataTableFilter } from "@/components/fa-prompt/data-table";
+import {
+  DataTable,
+  type DataTableFilterOptions,
+  type DataTableSortDirection,
+} from "@/components/fa-prompt/data-table";
+import { DataTableColumnHeader } from "@/components/fa-prompt/data-table-column-header";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -157,6 +162,35 @@ const emptyValues: TemplateFormValues = {
 };
 
 const blockTypes = ["role", "task", "context", "instruction", "example", "format"] as const;
+type TemplateSort = "name" | "visibility" | "block_count";
+type TemplateBlockSort = "name" | "type" | "dynamic" | "visibility" | "position";
+
+interface TemplateTableParams<TSort extends string> {
+  page: number;
+  pageSize: number;
+  q: string;
+  f: string;
+  sort: TSort;
+  order: DataTableSortDirection;
+}
+
+const DEFAULT_TEMPLATE_TABLE_PARAMS: TemplateTableParams<TemplateSort> = {
+  page: 1,
+  pageSize: 10,
+  q: "",
+  f: "",
+  sort: "name",
+  order: "asc",
+};
+
+const DEFAULT_BLOCK_TABLE_PARAMS: TemplateTableParams<TemplateBlockSort> = {
+  page: 1,
+  pageSize: 10,
+  q: "",
+  f: "",
+  sort: "position",
+  order: "asc",
+};
 type ClipboardCopyState = "idle" | "copied" | "error";
 
 type ComposableBlock = Pick<TemplateBlockPublic, "block_id" | "content" | "is_dynamic">;
@@ -215,6 +249,10 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
   const [composeError, setComposeError] = React.useState<string | null>(null);
   const [composeContent, setComposeContent] = React.useState<string | null>(null);
   const [copyState, setCopyState] = React.useState<ClipboardCopyState>("idle");
+  const [templateTableParams, setTemplateTableParams] =
+    React.useState<TemplateTableParams<TemplateSort>>(DEFAULT_TEMPLATE_TABLE_PARAMS);
+  const [blockTableParams, setBlockTableParams] =
+    React.useState<TemplateTableParams<TemplateBlockSort>>(DEFAULT_BLOCK_TABLE_PARAMS);
 
   const form = useForm<TemplateFormValues>({
     resolver: zodResolver(templateFormSchema),
@@ -328,11 +366,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorKey: "name",
         header: ({ column }) => (
-          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            {t.name}
-            <ArrowUpDown className="ml-2 size-4" />
-          </Button>
+          <DataTableColumnHeader column={column} title={t.name} />
         ),
+        enableSorting: true,
       },
       {
         id: "actions",
@@ -373,7 +409,10 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorFn: (row) => (row.is_public ? "public" : "private"),
         id: "visibility",
-        header: t.publicLabel,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t.publicLabel} />
+        ),
+        enableSorting: true,
         cell: ({ row }) => (
           <Badge variant={row.original.is_public ? "default" : "outline"}>
             {row.original.is_public ? "Public" : "Private"}
@@ -383,7 +422,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorFn: (row) => String(row.blocks.length),
         id: "block_count",
-        header: t.blocks,
+        header: ({ column }) => <DataTableColumnHeader column={column} title={t.blocks} />,
+        enableSorting: true,
         cell: ({ row }) => row.original.blocks.length,
       },
       {
@@ -422,11 +462,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorKey: "name",
         header: ({ column }) => (
-          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            {t.name}
-            <ArrowUpDown className="ml-2 size-4" />
-          </Button>
+          <DataTableColumnHeader column={column} title={t.name} />
         ),
+        enableSorting: true,
       },
       {
         id: "actions",
@@ -493,11 +531,16 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
           </div>
         ),
       },
-      { accessorKey: "type", header: t.type },
+      {
+        accessorKey: "type",
+        header: ({ column }) => <DataTableColumnHeader column={column} title={t.type} />,
+        enableSorting: true,
+      },
       {
         accessorFn: (row) => (row.is_dynamic ? "dynamic" : "static"),
         id: "dynamic",
-        header: "Dynamic",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Dynamic" />,
+        enableSorting: true,
         cell: ({ row }) => (
           <Badge variant={row.original.is_dynamic ? "default" : "secondary"}>
             {row.original.is_dynamic ? "Dynamic" : "Static"}
@@ -507,7 +550,10 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorFn: (row) => (row.is_public ? "public" : "private"),
         id: "visibility",
-        header: t.publicLabel,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t.publicLabel} />
+        ),
+        enableSorting: true,
         cell: ({ row }) => (
           <Badge variant={row.original.is_public ? "default" : "outline"}>
             {row.original.is_public ? "Public" : "Private"}
@@ -516,7 +562,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       },
       {
         accessorKey: "position",
-        header: "Position",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Position" />,
+        enableSorting: true,
       },
       {
         accessorKey: "content",
@@ -531,33 +578,110 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     [activeTemplate, t, templates.removeBlockMutation, templates.setPositionMutation],
   );
 
-  const publicFilter: DataTableFilter = {
-    columnId: "visibility",
-    label: t.publicLabel,
-    allLabel: t.allPublic,
+  const publicFilterOptions: DataTableFilterOptions = {
+    title: t.publicLabel,
     options: [
       { label: "Public", value: "public" },
       { label: "Private", value: "private" },
     ],
   };
-  const blockFilters: DataTableFilter[] = [
-    {
-      columnId: "type",
-      label: t.type,
-      allLabel: t.allTypes,
-      options: blockTypes.map((type) => ({ label: type, value: type })),
-    },
-    {
-      columnId: "dynamic",
-      label: "Dynamic",
-      allLabel: t.allDynamic,
-      options: [
-        { label: "Dynamic", value: "dynamic" },
-        { label: "Static", value: "static" },
-      ],
-    },
-    publicFilter,
-  ];
+  const blockFilterOptions: DataTableFilterOptions = {
+    title: t.type,
+    options: [
+      ...blockTypes.map((type) => ({ label: type, value: type })),
+      { label: "Dynamic", value: "dynamic" },
+      { label: "Static", value: "static" },
+      { label: "Public", value: "public" },
+      { label: "Private", value: "private" },
+    ],
+  };
+
+  const filteredTemplates = React.useMemo(() => {
+    const q = templateTableParams.q.trim().toLowerCase();
+    const rows = (templates.data?.data ?? []).filter((template) => {
+      const matchesQuery =
+        q === "" ||
+        template.name.toLowerCase().includes(q) ||
+        template.description?.toLowerCase().includes(q);
+      const activeFilters = templateTableParams.f ? templateTableParams.f.split(",") : [];
+      const matchesFilter =
+        activeFilters.length === 0 ||
+        activeFilters.some((filter) => {
+          if (filter === "public") return template.is_public;
+          if (filter === "private") return !template.is_public;
+          return false;
+        });
+      return matchesQuery && matchesFilter;
+    });
+    const direction = templateTableParams.order === "desc" ? -1 : 1;
+    return rows.sort((left, right) => {
+      const leftValue =
+        templateTableParams.sort === "visibility"
+          ? String(left.is_public)
+          : templateTableParams.sort === "block_count"
+            ? String(left.blocks.length).padStart(8, "0")
+            : left.name;
+      const rightValue =
+        templateTableParams.sort === "visibility"
+          ? String(right.is_public)
+          : templateTableParams.sort === "block_count"
+            ? String(right.blocks.length).padStart(8, "0")
+            : right.name;
+      return leftValue.localeCompare(rightValue) * direction;
+    });
+  }, [templateTableParams, templates.data?.data]);
+
+  const pagedTemplates = React.useMemo(() => {
+    const start = (templateTableParams.page - 1) * templateTableParams.pageSize;
+    return filteredTemplates.slice(start, start + templateTableParams.pageSize);
+  }, [filteredTemplates, templateTableParams.page, templateTableParams.pageSize]);
+
+  const filteredTemplateBlocks = React.useMemo(() => {
+    const q = blockTableParams.q.trim().toLowerCase();
+    const rows = (activeTemplate?.blocks ?? []).filter((block) => {
+      const matchesQuery =
+        q === "" ||
+        block.name.toLowerCase().includes(q) ||
+        block.description?.toLowerCase().includes(q) ||
+        block.content.toLowerCase().includes(q);
+      const activeFilters = blockTableParams.f ? blockTableParams.f.split(",") : [];
+      const matchesFilter =
+        activeFilters.length === 0 ||
+        activeFilters.some((filter) => {
+          if (filter === "dynamic") return block.is_dynamic;
+          if (filter === "static") return !block.is_dynamic;
+          if (filter === "public") return block.is_public;
+          if (filter === "private") return !block.is_public;
+          return block.type === filter;
+        });
+      return matchesQuery && matchesFilter;
+    });
+    const direction = blockTableParams.order === "desc" ? -1 : 1;
+    return rows.sort((left, right) => {
+      const leftValue =
+        blockTableParams.sort === "dynamic"
+          ? String(left.is_dynamic)
+          : blockTableParams.sort === "visibility"
+            ? String(left.is_public)
+            : blockTableParams.sort === "position"
+              ? String(left.position).padStart(8, "0")
+              : String(left[blockTableParams.sort]);
+      const rightValue =
+        blockTableParams.sort === "dynamic"
+          ? String(right.is_dynamic)
+          : blockTableParams.sort === "visibility"
+            ? String(right.is_public)
+            : blockTableParams.sort === "position"
+              ? String(right.position).padStart(8, "0")
+              : String(right[blockTableParams.sort]);
+      return leftValue.localeCompare(rightValue) * direction;
+    });
+  }, [activeTemplate?.blocks, blockTableParams]);
+
+  const pagedTemplateBlocks = React.useMemo(() => {
+    const start = (blockTableParams.page - 1) * blockTableParams.pageSize;
+    return filteredTemplateBlocks.slice(start, start + blockTableParams.pageSize);
+  }, [blockTableParams.page, blockTableParams.pageSize, filteredTemplateBlocks]);
 
   return (
     <section className="not-content space-y-6">
@@ -584,13 +708,48 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       <DataTable
         key="prompt-template-table-actions-v2"
         columns={templateColumns}
-        data={templates.data?.data ?? []}
-        searchColumn="name"
-        searchPlaceholder={t.searchTemplates}
-        filters={[publicFilter]}
-        emptyMessage={t.empty}
-        columnsLabel={t.columns}
-        selectedLabel={t.selected}
+        data={pagedTemplates}
+        loading={templates.loading}
+        rowCount={filteredTemplates.length}
+        page={templateTableParams.page}
+        pageSize={templateTableParams.pageSize}
+        onPageChange={(page) =>
+          setTemplateTableParams((current) => ({ ...current, page }))
+        }
+        onPageSizeChange={(pageSize) =>
+          setTemplateTableParams((current) => ({ ...current, page: 1, pageSize }))
+        }
+        sortBy={templateTableParams.sort}
+        sortDir={templateTableParams.order}
+        onSortChange={(sort, order) =>
+          setTemplateTableParams((current) => ({
+            ...current,
+            page: 1,
+            sort: (sort as TemplateSort | undefined) ?? DEFAULT_TEMPLATE_TABLE_PARAMS.sort,
+            order: order ?? DEFAULT_TEMPLATE_TABLE_PARAMS.order,
+          }))
+        }
+        q={templateTableParams.q}
+        onSearchChange={(q) =>
+          setTemplateTableParams((current) => ({ ...current, page: 1, q }))
+        }
+        f={templateTableParams.f}
+        onFilterChange={(f) =>
+          setTemplateTableParams((current) => ({ ...current, page: 1, f }))
+        }
+        filterOptions={publicFilterOptions}
+        labels={{
+          loading: t.loading,
+          empty: t.empty,
+          toolbar: {
+            search: t.searchTemplates,
+            reset: "Reset",
+            viewOptions: { view: t.columns, toggleColumns: t.columns },
+          },
+          pagination: {
+            selectedRows: t.selected,
+          },
+        }}
       />
 
       <Card>
@@ -654,13 +813,48 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               <DataTable
                 key={`prompt-template-blocks-actions-v2-${activeTemplate.id}`}
                 columns={blockColumns}
-                data={activeTemplate.blocks}
-                searchColumn="name"
-                searchPlaceholder={t.searchBlocks}
-                filters={blockFilters}
-                emptyMessage={t.blocks}
-                columnsLabel={t.columns}
-                selectedLabel={t.selected}
+                data={pagedTemplateBlocks}
+                loading={templates.loading}
+                rowCount={filteredTemplateBlocks.length}
+                page={blockTableParams.page}
+                pageSize={blockTableParams.pageSize}
+                onPageChange={(page) =>
+                  setBlockTableParams((current) => ({ ...current, page }))
+                }
+                onPageSizeChange={(pageSize) =>
+                  setBlockTableParams((current) => ({ ...current, page: 1, pageSize }))
+                }
+                sortBy={blockTableParams.sort}
+                sortDir={blockTableParams.order}
+                onSortChange={(sort, order) =>
+                  setBlockTableParams((current) => ({
+                    ...current,
+                    page: 1,
+                    sort: (sort as TemplateBlockSort | undefined) ?? DEFAULT_BLOCK_TABLE_PARAMS.sort,
+                    order: order ?? DEFAULT_BLOCK_TABLE_PARAMS.order,
+                  }))
+                }
+                q={blockTableParams.q}
+                onSearchChange={(q) =>
+                  setBlockTableParams((current) => ({ ...current, page: 1, q }))
+                }
+                f={blockTableParams.f}
+                onFilterChange={(f) =>
+                  setBlockTableParams((current) => ({ ...current, page: 1, f }))
+                }
+                filterOptions={blockFilterOptions}
+                labels={{
+                  loading: t.loading,
+                  empty: t.blocks,
+                  toolbar: {
+                    search: t.searchBlocks,
+                    reset: "Reset",
+                    viewOptions: { view: t.columns, toggleColumns: t.columns },
+                  },
+                  pagination: {
+                    selectedRows: t.selected,
+                  },
+                }}
               />
             </>
           ) : (
