@@ -181,16 +181,17 @@ describe("dynamic placeholder runtime UI", () => {
     });
 
     const view = render(<PromptComposer templateId={7} />);
+    input(view.container.querySelector("textarea") as HTMLTextAreaElement, "edited prompt body");
     await clickAsync(Array.from(view.container.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Copy")
     ) as HTMLButtonElement);
 
-    expect(clipboardWriteTextMock).toHaveBeenCalledWith("composed prompt body");
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith("edited prompt body");
     expect(view.container.textContent).toContain("Copied");
     view.unmount();
   });
 
-  it("clears stale template compose output, compacts the current result, and copies it", async () => {
+  it("clears stale template compose output, preserves newlines, and copies edited output", async () => {
     const compose = vi.fn().mockResolvedValue({ content: "stale\n\nservice\n\ncontent" });
     const template = {
       id: 7,
@@ -206,7 +207,7 @@ describe("dynamic placeholder runtime UI", () => {
           name: "Instruction",
           slug: "instruction",
           description: null,
-          content: "Static instruction",
+          content: "Static instruction\nKeep spacing\n",
           type: "instruction",
           is_dynamic: false,
           is_public: false,
@@ -219,7 +220,7 @@ describe("dynamic placeholder runtime UI", () => {
           name: "Source",
           slug: "source",
           description: null,
-          content: "Use this source:\n{{dynamic_content}}",
+          content: "Use this source:\n{{dynamic_content}}\nEnd source",
           type: "context",
           is_dynamic: true,
           is_public: false,
@@ -269,20 +270,21 @@ describe("dynamic placeholder runtime UI", () => {
     expect(dynamicLabel.className).toContain("mb-3");
     expect((dynamicLabel.querySelector("span") as HTMLSpanElement).className).toContain("py-2");
 
-    input(view.container.querySelector("textarea") as HTMLTextAreaElement, "replacement");
+    input(view.container.querySelector("textarea") as HTMLTextAreaElement, "replacement\nwith lines");
     await clickAsync(Array.from(view.container.querySelectorAll("button")).find((button) =>
       button.textContent === "Compose"
     ) as HTMLButtonElement);
 
-    const compactPrompt = "Static instruction Use this source: replacement";
-    const composedOutput = Array.from(view.container.querySelectorAll("pre")).at(-1) as HTMLPreElement;
-    expect(composedOutput.textContent?.trim()).toBe(compactPrompt);
+    const composedPrompt = "Static instruction\nKeep spacing\nUse this source:\nreplacement\nwith lines\nEnd source";
+    const composedOutput = Array.from(view.container.querySelectorAll("textarea")).at(-1) as HTMLTextAreaElement;
+    expect(composedOutput.value).toBe(composedPrompt);
+    input(composedOutput, "edited final\nprompt");
     await clickAsync(Array.from(view.container.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Copy")
     ) as HTMLButtonElement);
 
-    expect(compose).toHaveBeenCalledWith(7, [{ id: 42, content: "replacement" }]);
-    expect(clipboardWriteTextMock).toHaveBeenCalledWith(compactPrompt);
+    expect(compose).toHaveBeenCalledWith(7, [{ id: 42, content: "replacement\nwith lines" }]);
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith("edited final\nprompt");
     expect(view.container.textContent).toContain("Copied");
     view.unmount();
   });

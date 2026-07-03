@@ -175,11 +175,7 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function compactBlockWhitespace(content: string): string {
-  return content.replace(/\s+/g, " ").trim();
-}
-
-function compactComposedPrompt(
+function renderComposedPrompt(
   blocks: ComposableBlock[],
   dynamicFields: Record<number, string>,
   fallbackContent: string,
@@ -194,9 +190,8 @@ function compactComposedPrompt(
         ? block.content.split("{{dynamic_content}}").join(replacement)
         : replacement;
     })
-    .map(compactBlockWhitespace)
     .filter((part) => part.trim() !== "")
-    .join(" ");
+    .join("");
 
   return content || fallbackContent.trim();
 }
@@ -299,7 +294,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
             content: dynamicFields[block.block_id] ?? "",
           })),
       );
-      setComposeContent(compactComposedPrompt(activeTemplate.blocks, dynamicFields, result.content));
+      setComposeContent(renderComposedPrompt(activeTemplate.blocks, dynamicFields, result.content));
     } catch {
       setComposeContent(null);
       setComposeError("Could not compose template.");
@@ -812,9 +807,11 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
                     ) : null}
                   </div>
                 </div>
-                <pre className="max-h-72 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted p-3 text-sm">
-                  {composeContent}
-                </pre>
+                <Textarea
+                  className="min-h-40 max-h-72 max-w-full resize-y overflow-auto"
+                  value={composeContent}
+                  onChange={(event) => setComposeContent(event.target.value)}
+                />
               </div>
             ) : null}
           </div>

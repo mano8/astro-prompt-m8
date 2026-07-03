@@ -90,11 +90,7 @@ type ComposableBlock = {
   is_dynamic: boolean;
 };
 
-function compactBlockWhitespace(content: string): string {
-  return content.replace(/\s+/g, " ").trim();
-}
-
-function compactComposedPrompt(
+function renderComposedPrompt(
   blocks: ComposableBlock[],
   dynamicFields: Record<number, string>,
   fallbackContent: string
@@ -109,9 +105,8 @@ function compactComposedPrompt(
         ? block.content.split("{{dynamic_content}}").join(replacement)
         : replacement;
     })
-    .map(compactBlockWhitespace)
     .filter((part) => part.trim() !== "")
-    .join(" ");
+    .join("");
 
   return content || fallbackContent.trim();
 }
@@ -211,7 +206,7 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
           <label className="block space-y-1 text-sm">
             <span className="font-medium">{t.name}</span>
             <input
-              className="w-full rounded-md border bg-background px-3 py-2"
+              className="w-full rounded-md border bg-background px-3 py-3"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               required
@@ -220,7 +215,7 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
           <label className="block space-y-1 text-sm">
             <span className="font-medium">{t.description}</span>
             <input
-              className="w-full rounded-md border bg-background px-3 py-2"
+              className="w-full rounded-md border bg-background px-3 py-3"
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
             />
@@ -426,9 +421,7 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
                                 content: composerDynamic[block.block_id] ?? ""
                               }))
                           );
-                          setComposerResult(
-                            compactComposedPrompt(tpl.blocks, composerDynamic, result.content)
-                          );
+                          setComposerResult(renderComposedPrompt(tpl.blocks, composerDynamic, result.content));
                         } catch {
                           setComposerResult(null);
                           setComposeError(t.composingError);
@@ -442,6 +435,7 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
                           setCopyState(copied ? "copied" : "error")
                         )
                       }
+                      onResultChange={setComposerResult}
                       busy={composerId === tpl.id && composeMutation.isPending}
                     />
                   </div>
@@ -478,6 +472,7 @@ function ComposeInline({
   error,
   copyState,
   onCopy,
+  onResultChange,
   busy
 }: {
   templateId: number;
@@ -492,6 +487,7 @@ function ComposeInline({
   error: string | null;
   copyState: ClipboardCopyState;
   onCopy: (content: string) => Promise<void>;
+  onResultChange: (content: string) => void;
   busy: boolean;
 }) {
   const dynamic = blocks.filter((b) => b.is_dynamic);
@@ -569,9 +565,11 @@ function ComposeInline({
               ) : null}
             </div>
           </div>
-          <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs">
-            {composeResult}
-          </pre>
+          <textarea
+            className="min-h-32 w-full rounded-md border bg-background p-3 text-xs"
+            value={composeResult}
+            onChange={(event) => onResultChange(event.target.value)}
+          />
         </div>
       ) : null}
     </div>
