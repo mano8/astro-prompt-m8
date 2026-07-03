@@ -1,0 +1,108 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "mano8-prompt",
+  "homepage": "https://github.com/mano8/astro-prompt-m8",
+  "items": [
+    {
+      "name": "data-table",
+      "type": "registry:component",
+      "title": "Data Table",
+      "description": "Generic shadcn data table (search, filters, sorting, pagination, row selection, and column visibility) built on @tanstack/react-table.",
+      "dependencies": ["@tanstack/react-table", "lucide-react"],
+      "registryDependencies": ["table", "button", "input", "select", "dropdown-menu"],
+      "files": [
+        {
+          "path": "registry/blocks/data-table/data-table.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/data-table.tsx"
+        }
+      ]
+    },
+    {
+      "name": "prompt-block-editor",
+      "type": "registry:component",
+      "title": "Prompt Block Editor",
+      "description": "Full shadcn prompt-block editor with searchable/filterable data table, selectable columns, and Zod-validated create/edit forms. Requires @mano8/astro-prompt-m8 installed.",
+      "dependencies": ["@hookform/resolvers", "lucide-react", "react-hook-form", "zod"],
+      "registryDependencies": [
+        "alert-dialog",
+        "badge",
+        "button",
+        "checkbox",
+        "dialog",
+        "dropdown-menu",
+        "form",
+        "input",
+        "select",
+        "textarea",
+        "./node_modules/@mano8/astro-prompt-m8/registry/r/data-table.json"
+      ],
+      "files": [
+        {
+          "path": "registry/blocks/library/prompt-block-editor.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/prompt-block-editor.tsx"
+        }
+      ]
+    },
+    {
+      "name": "prompt-template-editor",
+      "type": "registry:component",
+      "title": "Prompt Template Editor",
+      "description": "Full shadcn prompt-template editor with searchable/filterable template and block data tables, selectable columns, and Zod-validated create/edit forms. Requires @mano8/astro-prompt-m8 installed.",
+      "dependencies": ["@hookform/resolvers", "lucide-react", "react-hook-form", "zod"],
+      "registryDependencies": [
+        "alert-dialog",
+        "badge",
+        "button",
+        "card",
+        "checkbox",
+        "dialog",
+        "dropdown-menu",
+        "form",
+        "input",
+        "select",
+        "textarea",
+        "./node_modules/@mano8/astro-prompt-m8/registry/r/data-table.json"
+      ],
+      "files": [
+        {
+          "path": "registry/blocks/editor/prompt-template-editor.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/prompt-template-editor.tsx"
+        }
+      ]
+    },
+    {
+      "name": "prompt-dashboard-overview",
+      "type": "registry:component",
+      "title": "Prompt Admin Dashboard Overview",
+      "description": "Prompt-engine dashboard (stat cards + activity) driven by usePromptAdmin. Requires @mano8/astro-prompt-m8 installed.",
+      "dependencies": ["lucide-react"],
+      "registryDependencies": ["card", "skeleton"],
+      "files": [
+        {
+          "path": "registry/blocks/admin/prompt-dashboard-overview.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/prompt-dashboard-overview.tsx"
+        }
+      ]
+    },
+    {
+      "name": "admin-prompt-dashboard",
+      "type": "registry:component",
+      "title": "Admin Prompt Dashboard",
+      "description": "Prompt admin overview dashboard; wraps the package's PromptProvider + RequireSuperuser. Requires @mano8/astro-prompt-m8 (and a fa-auth-m8 token adapter) installed.",
+      "registryDependencies": [
+        "./node_modules/@mano8/astro-prompt-m8/registry/r/prompt-dashboard-overview.json"
+      ],
+      "files": [
+        {
+          "path": "registry/blocks/admin/admin-prompt-dashboard.tsx",
+          "type": "registry:component",
+          "target": "components/fa-prompt/admin-prompt-dashboard.tsx"
+        }
+      ]
+    }
+  ]
+}

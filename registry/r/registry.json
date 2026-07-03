@@ -1,0 +1,37 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "mano8-prompt",
+  "homepage": "https://github.com/mano8/astro-prompt-m8",
+  "items": [
+    {
+      "name": "data-table",
+      "type": "registry:component",
+      "title": "Data Table",
+      "description": "Generic shadcn data table (search, filters, sorting, pagination, row selection, and column visibility) built on @tanstack/react-table."
+    },
+    {
+      "name": "prompt-block-editor",
+      "type": "registry:component",
+      "title": "Prompt Block Editor",
+      "description": "Full shadcn prompt-block editor with searchable/filterable data table, selectable columns, and Zod-validated create/edit forms. Requires @mano8/astro-prompt-m8 installed."
+    },
+    {
+      "name": "prompt-template-editor",
+      "type": "registry:component",
+      "title": "Prompt Template Editor",
+      "description": "Full shadcn prompt-template editor with searchable/filterable template and block data tables, selectable columns, and Zod-validated create/edit forms. Requires @mano8/astro-prompt-m8 installed."
+    },
+    {
+      "name": "prompt-dashboard-overview",
+      "type": "registry:component",
+      "title": "Prompt Admin Dashboard Overview",
+      "description": "Prompt-engine dashboard (stat cards + activity) driven by usePromptAdmin. Requires @mano8/astro-prompt-m8 installed."
+    },
+    {
+      "name": "admin-prompt-dashboard",
+      "type": "registry:component",
+      "title": "Admin Prompt Dashboard",
+      "description": "Prompt admin overview dashboard; wraps the package's PromptProvider + RequireSuperuser. Requires @mano8/astro-prompt-m8 (and a fa-auth-m8 token adapter) installed."
+    }
+  ]
+}
