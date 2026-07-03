@@ -2,6 +2,7 @@ import * as React from "react";
 import { usePromptBlocks } from "../hooks/usePromptBlocks.js";
 import { usePromptTemplates } from "../hooks/usePromptTemplates.js";
 import { useComposePrompt } from "../hooks/useComposePrompt.js";
+import { copyTextToClipboard, type ClipboardCopyState } from "./clipboard.js";
 import type { PromptBlockPublic } from "../schemas.js";
 
 export interface PromptTemplateEditorLabels {
@@ -28,6 +29,9 @@ export interface PromptTemplateEditorLabels {
   compose: string;
   composeLabel: string;
   composed: string;
+  copyComposed: string;
+  copied: string;
+  copyError: string;
   composing: string;
   composingError: string;
   dynamicFor: string;
@@ -60,6 +64,9 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   compose: "Compose",
   composeLabel: "Compose this template",
   composed: "Composed prompt",
+  copyComposed: "Copy",
+  copied: "Copied",
+  copyError: "Could not copy",
   composing: "Composing…",
   composingError: "Could not compose template.",
   dynamicFor: "Dynamic content for",
@@ -77,6 +84,38 @@ type DraftState = {
 
 const EMPTY_DRAFT: DraftState = { name: "", description: "", is_public: false };
 
+type ComposableBlock = {
+  block_id: number;
+  content: string;
+  is_dynamic: boolean;
+};
+
+function compactBlockWhitespace(content: string): string {
+  return content.replace(/\s+/g, " ").trim();
+}
+
+function compactComposedPrompt(
+  blocks: ComposableBlock[],
+  dynamicFields: Record<number, string>,
+  fallbackContent: string
+): string {
+  const content = blocks
+    .map((block) => {
+      if (!block.is_dynamic) {
+        return block.content;
+      }
+      const replacement = dynamicFields[block.block_id] ?? "";
+      return block.content.includes("{{dynamic_content}}")
+        ? block.content.split("{{dynamic_content}}").join(replacement)
+        : replacement;
+    })
+    .map(compactBlockWhitespace)
+    .filter((part) => part.trim() !== "")
+    .join(" ");
+
+  return content || fallbackContent.trim();
+}
+
 export interface PromptTemplateEditorProps {
   labels?: Partial<PromptTemplateEditorLabels>;
 }
@@ -91,6 +130,8 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
   const [composeError, setComposeError] = React.useState<string | null>(null);
   const [composerId, setComposerId] = React.useState<number | null>(null);
   const [composerDynamic, setComposerDynamic] = React.useState<Record<number, string>>({});
+  const [composerResult, setComposerResult] = React.useState<string | null>(null);
+  const [copyState, setCopyState] = React.useState<ClipboardCopyState>("idle");
 
   const { compose, composeMutation } = useComposePrompt();
 
@@ -359,6 +400,8 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
                         setComposerId(tpl.id);
                         setComposeError(null);
                         setComposerDynamic({});
+                        setComposerResult(null);
+                        setCopyState("idle");
                       }}
                       onField={(blockId, value) =>
                         setComposerDynamic((current) => ({ ...current, [blockId]: value }))
@@ -371,22 +414,34 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
                         );
                         if (missing) {
                           setComposeError(t.missingDynamic);
+                          setComposerResult(null);
                           return;
                         }
                         try {
-                          await compose(
+                          setCopyState("idle");
+                          const result = await compose(
                             tpl.id,
                             dynamicBlocks.map((block) => ({
                                 id: block.block_id,
                                 content: composerDynamic[block.block_id] ?? ""
                               }))
                           );
+                          setComposerResult(
+                            compactComposedPrompt(tpl.blocks, composerDynamic, result.content)
+                          );
                         } catch {
+                          setComposerResult(null);
                           setComposeError(t.composingError);
                         }
                       }}
-                      composeResult={composerId === tpl.id ? composeMutation.data?.content ?? null : null}
+                      composeResult={composerId === tpl.id ? composerResult : null}
                       error={composerId === tpl.id ? composeError : null}
+                      copyState={copyState}
+                      onCopy={(content) =>
+                        copyTextToClipboard(content).then((copied) =>
+                          setCopyState(copied ? "copied" : "error")
+                        )
+                      }
                       busy={composerId === tpl.id && composeMutation.isPending}
                     />
                   </div>
@@ -421,6 +476,8 @@ function ComposeInline({
   onCompose,
   composeResult,
   error,
+  copyState,
+  onCopy,
   busy
 }: {
   templateId: number;
@@ -433,6 +490,8 @@ function ComposeInline({
   onCompose: () => void;
   composeResult: string | null;
   error: string | null;
+  copyState: ClipboardCopyState;
+  onCopy: (content: string) => Promise<void>;
   busy: boolean;
 }) {
   const dynamic = blocks.filter((b) => b.is_dynamic);
@@ -454,8 +513,8 @@ function ComposeInline({
         <p className="text-xs text-muted-foreground">{t.noDynamic}</p>
       ) : (
         dynamic.map((b) => (
-          <label key={b.block_id} className="block space-y-1 text-sm">
-            <span className="font-medium">
+          <label key={b.block_id} className="mb-3 block space-y-1 text-sm">
+            <span className="block py-2 font-medium">
               {t.dynamicFor}: {b.name}
             </span>
             <textarea
@@ -485,9 +544,35 @@ function ComposeInline({
         </p>
       ) : null}
       {composeResult ? (
-        <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs">
-          {composeResult}
-        </pre>
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+            <p className="text-xs font-medium">{t.composed}</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md border px-2 py-1 text-xs font-medium"
+                onClick={() => void onCopy(composeResult)}
+              >
+                {t.copyComposed}
+              </button>
+              {copyState !== "idle" ? (
+                <span
+                  role={copyState === "error" ? "alert" : "status"}
+                  className={
+                    copyState === "error"
+                      ? "text-xs text-destructive"
+                      : "text-xs text-muted-foreground"
+                  }
+                >
+                  {copyState === "copied" ? t.copied : t.copyError}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs">
+            {composeResult}
+          </pre>
+        </div>
       ) : null}
     </div>
   );

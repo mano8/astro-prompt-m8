@@ -4,6 +4,7 @@ import { useComposePrompt } from "../hooks/useComposePrompt.js";
 import { usePromptTemplate } from "../hooks/usePromptTemplate.js";
 import { usePromptTemplateBlocks } from "../hooks/usePromptTemplate.js";
 import { usePromptTemplates } from "../hooks/usePromptTemplates.js";
+import { copyTextToClipboard, type ClipboardCopyState } from "./clipboard.js";
 import type {
   PromptBlockPublic,
   PromptTemplatePublic,
@@ -16,6 +17,9 @@ export interface PromptComposerLabels {
   pickTemplate: string;
   noTemplate: string;
   composed: string;
+  copyComposed: string;
+  copied: string;
+  copyError: string;
   compose: string;
   composing: string;
   composingError: string;
@@ -33,6 +37,9 @@ const DEFAULT_LABELS: PromptComposerLabels = {
   pickTemplate: "Template",
   noTemplate: "Select a template to compose",
   composed: "Composed prompt",
+  copyComposed: "Copy",
+  copied: "Copied",
+  copyError: "Could not copy",
   compose: "Compose",
   composing: "Composing…",
   composingError: "Could not compose prompt.",
@@ -58,6 +65,7 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
   const { compose, composeMutation } = useComposePrompt();
   const [dynamic, setDynamic] = React.useState<Record<number, string>>({});
   const [dynamicError, setDynamicError] = React.useState<string | null>(null);
+  const [copyState, setCopyState] = React.useState<ClipboardCopyState>("idle");
 
   const selected = template.data ?? null;
   const blocks = templateBlocks.blocks ?? [];
@@ -66,8 +74,13 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
     if (selectedId !== undefined) {
       setDynamic({});
       setDynamicError(null);
+      setCopyState("idle");
     }
   }, [selectedId]);
+
+  React.useEffect(() => {
+    setCopyState("idle");
+  }, [composeMutation.data?.content]);
 
   const dynamicBlocks = blocks.filter((b) => b.is_dynamic);
 
@@ -175,7 +188,34 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
 
           {composeMutation.data ? (
             <div className="space-y-1">
-              <h3 className="text-sm font-medium">{t.composed}</h3>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-medium">{t.composed}</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border px-3 py-1 text-xs font-medium"
+                    onClick={() => {
+                      void copyTextToClipboard(composeMutation.data.content).then((copied) =>
+                        setCopyState(copied ? "copied" : "error")
+                      );
+                    }}
+                  >
+                    {t.copyComposed}
+                  </button>
+                  {copyState !== "idle" ? (
+                    <span
+                      role={copyState === "error" ? "alert" : "status"}
+                      className={
+                        copyState === "error"
+                          ? "text-xs text-destructive"
+                          : "text-xs text-muted-foreground"
+                      }
+                    >
+                      {copyState === "copied" ? t.copied : t.copyError}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
               <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-4 text-sm">
                 {composeMutation.data.content}
               </pre>

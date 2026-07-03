@@ -5,7 +5,7 @@
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, FileText, Plus, Wand2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Copy, FileText, Plus, Wand2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { usePromptBlocks, usePromptTemplates, useComposePrompt } from "@mano8/astro-prompt-m8/hooks";
@@ -69,6 +69,7 @@ export interface PromptTemplateEditorLabels {
   cancel: string;
   actions: string;
   name: string;
+  type: string;
   description: string;
   publicLabel: string;
   blocks: string;
@@ -80,6 +81,9 @@ export interface PromptTemplateEditorLabels {
   compose: string;
   composeTitle: string;
   composeResult: string;
+  copyComposed: string;
+  copied: string;
+  copyError: string;
   dynamicFor: string;
   dynamicPlaceholder: string;
   missingDynamic: string;
@@ -108,6 +112,7 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   cancel: "Cancel",
   actions: "Actions",
   name: "Name",
+  type: "Type",
   description: "Description",
   publicLabel: "Public",
   blocks: "Blocks",
@@ -119,6 +124,9 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   compose: "Compose",
   composeTitle: "Compose template",
   composeResult: "Composed prompt",
+  copyComposed: "Copy",
+  copied: "Copied",
+  copyError: "Could not copy",
   dynamicFor: "Dynamic content for",
   dynamicPlaceholder: "Replacement value",
   missingDynamic: "Enter every dynamic replacement value.",
@@ -149,6 +157,49 @@ const emptyValues: TemplateFormValues = {
 };
 
 const blockTypes = ["role", "task", "context", "instruction", "example", "format"] as const;
+type ClipboardCopyState = "idle" | "copied" | "error";
+
+type ComposableBlock = Pick<TemplateBlockPublic, "block_id" | "content" | "is_dynamic">;
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  const clipboard = globalThis.navigator?.clipboard;
+  if (!clipboard?.writeText) {
+    return false;
+  }
+
+  try {
+    await clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function compactBlockWhitespace(content: string): string {
+  return content.replace(/\s+/g, " ").trim();
+}
+
+function compactComposedPrompt(
+  blocks: ComposableBlock[],
+  dynamicFields: Record<number, string>,
+  fallbackContent: string,
+): string {
+  const content = blocks
+    .map((block) => {
+      if (!block.is_dynamic) {
+        return block.content;
+      }
+      const replacement = dynamicFields[block.block_id] ?? "";
+      return block.content.includes("{{dynamic_content}}")
+        ? block.content.split("{{dynamic_content}}").join(replacement)
+        : replacement;
+    })
+    .map(compactBlockWhitespace)
+    .filter((part) => part.trim() !== "")
+    .join(" ");
+
+  return content || fallbackContent.trim();
+}
 
 export interface PromptTemplateEditorSkinProps {
   labels?: Partial<PromptTemplateEditorLabels>;
@@ -167,6 +218,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
   const [composeOpen, setComposeOpen] = React.useState(false);
   const [dynamicFields, setDynamicFields] = React.useState<Record<number, string>>({});
   const [composeError, setComposeError] = React.useState<string | null>(null);
+  const [composeContent, setComposeContent] = React.useState<string | null>(null);
+  const [copyState, setCopyState] = React.useState<ClipboardCopyState>("idle");
 
   const form = useForm<TemplateFormValues>({
     resolver: zodResolver(templateFormSchema),
@@ -233,18 +286,22 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     );
     if (missing) {
       setComposeError(t.missingDynamic);
+      setComposeContent(null);
       return;
     }
     try {
       setComposeError(null);
-      await compose(
+      setCopyState("idle");
+      const result = await compose(
         activeTemplate.id,
         dynamicBlocks.map((block) => ({
             id: block.block_id,
             content: dynamicFields[block.block_id] ?? "",
           })),
       );
+      setComposeContent(compactComposedPrompt(activeTemplate.blocks, dynamicFields, result.content));
     } catch {
+      setComposeContent(null);
       setComposeError("Could not compose template.");
     }
   };
@@ -589,6 +646,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
                   className="md:ml-auto"
                   onClick={() => {
                     setDynamicFields({});
+                    setComposeError(null);
+                    setComposeContent(null);
+                    setCopyState("idle");
                     setComposeOpen(true);
                   }}
                 >
@@ -682,8 +742,10 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{t.composeTitle}</DialogTitle>
-            <DialogDescription>{activeTemplate?.name}</DialogDescription>
+            <DialogTitle>
+              {activeTemplate ? `${t.composeTitle}: ${activeTemplate.name}` : t.composeTitle}
+            </DialogTitle>
+            <DialogDescription>{activeTemplate?.description ?? activeTemplate?.name}</DialogDescription>
           </DialogHeader>
           <div className="min-w-0 space-y-4">
             {(activeTemplate?.blocks ?? []).filter((block) => block.is_dynamic).length === 0 ? (
@@ -692,8 +754,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               (activeTemplate?.blocks ?? [])
                 .filter((block) => block.is_dynamic)
                 .map((block) => (
-                  <div key={block.block_id} className="space-y-2">
-                    <label className="text-sm font-medium">
+                  <div key={block.block_id} className="mb-3 space-y-2">
+                    <label className="block py-2 text-sm font-medium">
                       {t.dynamicFor}: {block.name}
                     </label>
                     <Textarea
@@ -718,11 +780,40 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
                 {composeError}
               </p>
             ) : null}
-            {composeMutation.data?.content ? (
+            {composeContent ? (
               <div className="space-y-2">
-                <p className="text-sm font-medium">{t.composeResult}</p>
+                <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <p className="text-sm font-medium">{t.composeResult}</p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void copyTextToClipboard(composeContent).then((copied) =>
+                          setCopyState(copied ? "copied" : "error"),
+                        );
+                      }}
+                    >
+                      <Copy className="mr-2 size-4" />
+                      {t.copyComposed}
+                    </Button>
+                    {copyState !== "idle" ? (
+                      <span
+                        role={copyState === "error" ? "alert" : "status"}
+                        className={
+                          copyState === "error"
+                            ? "text-xs text-destructive"
+                            : "text-xs text-muted-foreground"
+                        }
+                      >
+                        {copyState === "copied" ? t.copied : t.copyError}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
                 <pre className="max-h-72 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted p-3 text-sm">
-                  {composeMutation.data.content}
+                  {composeContent}
                 </pre>
               </div>
             ) : null}
