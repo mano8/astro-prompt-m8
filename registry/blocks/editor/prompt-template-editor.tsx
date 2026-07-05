@@ -685,8 +685,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
 
   return (
     <section className="not-content space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-2 pb-3">
-        <div className="space-y-1">
+      <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
+        <div className="space-y-2">
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
           <p className="text-sm text-muted-foreground">{t.subtitle}</p>
         </div>
@@ -765,7 +765,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
         <CardContent className="space-y-4">
           {activeTemplate ? (
             <>
-              <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center">
                 <Select value={blockToAdd} onValueChange={setBlockToAdd}>
                   <SelectTrigger className="md:max-w-sm">
                     <SelectValue placeholder={t.addBlock} />
@@ -943,7 +943,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               (activeTemplate?.blocks ?? [])
                 .filter((block) => block.is_dynamic)
                 .map((block) => (
-                  <div key={block.block_id} className="mb-3 space-y-2">
+                  <div key={block.block_id} className="mb-3 space-y-3">
                     <label className="block py-2 text-sm font-medium">
                       {t.dynamicFor}: {block.name}
                     </label>
@@ -970,8 +970,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               </p>
             ) : null}
             {composeContent ? (
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 py-2">
                   <p className="text-sm font-medium">{t.composeResult}</p>
                   <div className="flex items-center gap-2">
                     <Button

@@ -399,8 +399,8 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
 
   return (
     <section className="not-content space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-2 pb-3">
-        <div className="space-y-1">
+      <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
+        <div className="space-y-2">
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
           <p className="text-sm text-muted-foreground">{t.subtitle}</p>
         </div>
