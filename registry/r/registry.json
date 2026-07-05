@@ -4,12 +4,6 @@
   "homepage": "https://github.com/mano8/astro-prompt-m8",
   "items": [
     {
-      "name": "data-table",
-      "type": "registry:component",
-      "title": "Data Table",
-      "description": "Controlled shadcn data table (search, faceted filters, sorting, pagination, row selection, and column visibility) built on @tanstack/react-table."
-    },
-    {
       "name": "prompt-block-editor",
       "type": "registry:component",
       "title": "Prompt Block Editor",

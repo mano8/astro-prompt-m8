@@ -4,56 +4,6 @@
   "homepage": "https://github.com/mano8/astro-prompt-m8",
   "items": [
     {
-      "name": "data-table",
-      "type": "registry:component",
-      "title": "Data Table",
-      "description": "Controlled shadcn data table (search, faceted filters, sorting, pagination, row selection, and column visibility) built on @tanstack/react-table.",
-      "dependencies": ["@tanstack/react-table", "lucide-react"],
-      "registryDependencies": [
-        "badge",
-        "button",
-        "command",
-        "dropdown-menu",
-        "input",
-        "popover",
-        "select",
-        "separator",
-        "table"
-      ],
-      "files": [
-        {
-          "path": "registry/blocks/data-table/data-table.tsx",
-          "type": "registry:component",
-          "target": "components/fa-prompt/data-table.tsx"
-        },
-        {
-          "path": "registry/blocks/data-table/data-table-column-header.tsx",
-          "type": "registry:component",
-          "target": "components/fa-prompt/data-table-column-header.tsx"
-        },
-        {
-          "path": "registry/blocks/data-table/data-table-pagination.tsx",
-          "type": "registry:component",
-          "target": "components/fa-prompt/data-table-pagination.tsx"
-        },
-        {
-          "path": "registry/blocks/data-table/data-table-server-faceted-filter.tsx",
-          "type": "registry:component",
-          "target": "components/fa-prompt/data-table-server-faceted-filter.tsx"
-        },
-        {
-          "path": "registry/blocks/data-table/data-table-server-toolbar.tsx",
-          "type": "registry:component",
-          "target": "components/fa-prompt/data-table-server-toolbar.tsx"
-        },
-        {
-          "path": "registry/blocks/data-table/data-table-view-options.tsx",
-          "type": "registry:component",
-          "target": "components/fa-prompt/data-table-view-options.tsx"
-        }
-      ]
-    },
-    {
       "name": "prompt-block-editor",
       "type": "registry:component",
       "title": "Prompt Block Editor",
@@ -70,7 +20,7 @@
         "input",
         "select",
         "textarea",
-        "./node_modules/@mano8/astro-prompt-m8/registry/r/data-table.json"
+        "./node_modules/@mano8/astro-ui-m8/registry/r/data-table.json"
       ],
       "files": [
         {
@@ -98,7 +48,7 @@
         "input",
         "select",
         "textarea",
-        "./node_modules/@mano8/astro-prompt-m8/registry/r/data-table.json"
+        "./node_modules/@mano8/astro-ui-m8/registry/r/data-table.json"
       ],
       "files": [
         {

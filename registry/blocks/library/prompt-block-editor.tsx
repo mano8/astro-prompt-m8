@@ -19,8 +19,8 @@ import {
   DataTable,
   type DataTableFilterOptions,
   type DataTableSortDirection,
-} from "@/components/fa-prompt/data-table";
-import { DataTableColumnHeader } from "@/components/fa-prompt/data-table-column-header";
+} from "@/components/m8-ui/data-table";
+import { DataTableColumnHeader } from "@/components/m8-ui/data-table-column-header";
 import {
   AlertDialog,
   AlertDialogAction,
