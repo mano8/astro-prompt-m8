@@ -50,6 +50,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run build:registry",
     "build:registry": "node scripts/build-registry.mjs",
+    "verify:starter-routes": "node scripts/verify-starter-routes.mjs",
     "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run"
@@ -58,6 +59,8 @@
     "@mano8/astro-ui-m8": "^0.1.0-alpha.1"
   },
   "peerDependencies": {
+    "@astrojs/react": "^4.0.0 || ^5.0.0",
+    "@astrojs/starlight": "^0.39.3",
     "@mano8/astro-auth-m8": "^0.1.0-alpha.1",
     "@tanstack/react-query": "^5.101.1",
     "astro": "^5.0.0 || ^6.0.0",
@@ -66,6 +69,9 @@
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "@astrojs/react": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },
@@ -74,6 +80,8 @@
     }
   },
   "devDependencies": {
+    "@astrojs/react": "^5.0.7",
+    "@astrojs/starlight": "^0.39.3",
     "@mano8/astro-auth-m8": "^0.1.0-alpha.1",
     "@tanstack/react-query": "^5.101.1",
     "@types/node": "^22.0.0",

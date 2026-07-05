@@ -35,7 +35,9 @@ elsewhere.
 npm i @mano8/astro-prompt-m8 @mano8/astro-auth-m8 zod
 ```
 
-`@mano8/astro-auth-m8` is a required peer: `prompt-engine-m8` only accepts
+`@astrojs/starlight` and `@astrojs/react` are required for starter routes because
+the package routes render through Starlight's page shell and hydrate React
+islands. `@mano8/astro-auth-m8` is a required peer: `prompt-engine-m8` only accepts
 `fa-auth-m8`-issued tokens, so the plugin's auth adapter must be backed by
 `fa-auth-m8` (the official plugin, or a custom adapter that obtains those
 tokens). `react`/`react-dom` are optional — only `./react`, `./hooks` and the
@@ -44,7 +46,8 @@ starter views need them.
 ## Modes
 
 - **headless** — schemas, API wrappers, compose helper, stores; no pages.
-- **starter** — injects blocks / templates / composer / admin routes.
+- **starter** — injects Starlight-layout blocks / templates / composer / admin
+  routes.
 - **scaffolded** — `views.strategy: "scaffolded"` to own the view files.
 
 ## Quick start

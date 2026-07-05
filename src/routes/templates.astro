@@ -1,4 +1,5 @@
 ---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import { TemplatesView } from "@mano8/astro-prompt-m8/default-ui";
 import "../scaffold/styles/prompt.css";
 
@@ -8,4 +9,12 @@ const config = {
   adminRole: import.meta.env.PUBLIC_FA_PROMPT_ADMIN_ROLE
 };
 ---
-<TemplatesView client:load config={config} />
+<StarlightPage
+  frontmatter={{
+    title: "Prompt templates",
+    description: "Manage prompt templates and template blocks.",
+    tableOfContents: false
+  }}
+>
+  <TemplatesView client:load config={config} />
+</StarlightPage>
