@@ -5,15 +5,22 @@
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, Copy, FileText, Plus, Wand2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Download, FileText, Plus, Upload, Wand2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { usePromptBlocks, usePromptTemplates, useComposePrompt } from "@mano8/astro-prompt-m8/hooks";
-import type {
-  PromptBlockPublic,
-  PromptTemplatePublic,
-  TemplateBlockPublic,
+import {
+  usePromptBlocks,
+  usePromptTemplates,
+  useComposePrompt,
+  usePromptTransfer,
+} from "@mano8/astro-prompt-m8/hooks";
+import {
+  promptExportFilename,
+  type PromptBlockPublic,
+  type PromptTemplatePublic,
+  type TemplateBlockPublic,
 } from "@mano8/astro-prompt-m8/schemas";
+import { downloadPromptExport, readPromptExportFile } from "@mano8/astro-prompt-m8/react";
 
 import {
   DataTable,
@@ -103,6 +110,9 @@ export interface PromptTemplateEditorLabels {
   allTypes: string;
   columns: string;
   selected: (selected: number, total: number) => string;
+  exportLabel: string;
+  importLabel: string;
+  importError: string;
 }
 
 const DEFAULT_LABELS: PromptTemplateEditorLabels = {
@@ -146,6 +156,9 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   allTypes: "All types",
   columns: "Columns",
   selected: (selected, total) => `${selected} of ${total} selected`,
+  exportLabel: "Export",
+  importLabel: "Import",
+  importError: "Could not import file.",
 };
 
 const templateFormSchema = z.object({
@@ -239,6 +252,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
   const templates = usePromptTemplates();
   const blocks = usePromptBlocks();
   const { compose, composeMutation } = useComposePrompt();
+  const { exportTemplateMutation, importMutation } = usePromptTransfer();
+  const [transferStatus, setTransferStatus] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [editing, setEditing] = React.useState<PromptTemplatePublic | null>(null);
   const [open, setOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PromptTemplatePublic | null>(null);
@@ -309,6 +325,28 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     }
     setOpen(false);
     setEditing(null);
+  };
+
+  const exportTemplate = async (template: PromptTemplatePublic) => {
+    setTransferStatus(null);
+    const payload = await exportTemplateMutation.mutateAsync(template.id);
+    downloadPromptExport(payload, promptExportFilename("template", template.slug));
+  };
+
+  const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setTransferStatus(null);
+    try {
+      const parsed = await readPromptExportFile(file);
+      const result = await importMutation.mutateAsync(parsed);
+      setTransferStatus(
+        `Imported ${result.templates.created.length} template(s), ${result.templates.skipped.length} skipped (already exist).`,
+      );
+    } catch {
+      setTransferStatus(t.importError);
+    }
   };
 
   const runCompose = async () => {
@@ -384,6 +422,16 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               onClick={() => setActiveId(row.original.id)}
             >
               {t.blocks}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => void exportTemplate(row.original)}
+            >
+              <Download className="mr-1 size-3.5" />
+              {t.exportLabel}
             </Button>
             <Button
               type="button"
@@ -690,11 +738,35 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
           <p className="text-sm text-muted-foreground">{t.subtitle}</p>
         </div>
-        <Button type="button" onClick={startCreate}>
-          <Plus className="mr-2 size-4" />
-          {t.create}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={importMutation.isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="mr-2 size-4" />
+            {t.importLabel}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={onImportFile}
+          />
+          <Button type="button" onClick={startCreate}>
+            <Plus className="mr-2 size-4" />
+            {t.create}
+          </Button>
+        </div>
       </div>
+
+      {transferStatus ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {transferStatus}
+        </p>
+      ) : null}
 
       {templates.loading && !templates.data ? (
         <p className="text-sm text-muted-foreground">{t.loading}</p>
