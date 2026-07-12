@@ -9,7 +9,11 @@ const usePromptTemplatesMock = vi.hoisted(() => vi.fn());
 const usePromptTemplateMock = vi.hoisted(() => vi.fn());
 const usePromptTemplateBlocksMock = vi.hoisted(() => vi.fn());
 const useComposePromptMock = vi.hoisted(() => vi.fn());
+const usePromptTransferMock = vi.hoisted(() => vi.fn());
 
+vi.mock("../src/runtime/hooks/usePromptTransfer.js", () => ({
+  usePromptTransfer: usePromptTransferMock
+}));
 vi.mock("../src/runtime/hooks/usePromptBlocks.js", () => ({
   usePromptBlocks: usePromptBlocksMock
 }));
@@ -71,6 +75,12 @@ beforeEach(() => {
   usePromptTemplateMock.mockReset();
   usePromptTemplateBlocksMock.mockReset();
   useComposePromptMock.mockReset();
+  usePromptTransferMock.mockReset();
+  usePromptTransferMock.mockReturnValue({
+    exportBlockMutation: { isPending: false, mutateAsync: vi.fn() },
+    exportTemplateMutation: { isPending: false, mutateAsync: vi.fn() },
+    importMutation: { isPending: false, mutateAsync: vi.fn() }
+  });
   clipboardWriteTextMock.mockReset();
   clipboardWriteTextMock.mockResolvedValue(undefined);
   Object.defineProperty(globalThis.navigator, "clipboard", {
@@ -94,7 +104,9 @@ describe("dynamic placeholder runtime UI", () => {
     });
 
     const view = render(<PromptBlockLibrary />);
-    click(view.container.querySelector("button") as HTMLButtonElement);
+    click(Array.from(view.container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("New block")
+    ) as HTMLButtonElement);
     const textarea = view.container.querySelector("textarea") as HTMLTextAreaElement;
     input(textarea, "Use this source:\n");
     click(view.container.querySelector('input[type="checkbox"]') as HTMLInputElement);

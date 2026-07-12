@@ -5,3 +5,4 @@ export { PromptBlockLibrary } from "./PromptBlockLibrary.js";
 export { PromptTemplateEditor } from "./PromptTemplateEditor.js";
 export { PromptComposer } from "./PromptComposer.js";
 export { AdminPromptPanel } from "./AdminPromptPanel.js";
+export { downloadPromptExport, readPromptExportFile } from "./transfer-file.js";

@@ -3,6 +3,7 @@ import * as templatesApi from "./templates.js";
 import * as categoriesApi from "./categories.js";
 import * as dashboardApi from "./dashboard.js";
 import * as adminApi from "./admin.js";
+import * as transferApi from "./transfer.js";
 
 // Flat named exports (tree-shakeable direct imports).
 export * from "./blocks.js";
@@ -10,6 +11,7 @@ export * from "./templates.js";
 export * from "./categories.js";
 export * from "./dashboard.js";
 export * from "./admin.js";
+export * from "./transfer.js";
 
 // Grouped namespaces (`blocks.list`, `templates.compose`, ...).
 export const blocks = {
@@ -50,4 +52,10 @@ export const dashboard = {
 
 export const admin = {
   overview: adminApi.getAdminOverview
+} as const;
+
+export const transfer = {
+  exportBlock: transferApi.exportBlockById,
+  exportTemplate: transferApi.exportTemplateById,
+  import: transferApi.importPromptExport
 } as const;
