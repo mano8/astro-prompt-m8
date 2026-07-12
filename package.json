@@ -84,6 +84,7 @@
     "@astrojs/starlight": "^0.39.3",
     "@mano8/astro-auth-m8": "^0.1.0-alpha.3",
     "@tanstack/react-query": "^5.101.1",
+    "@testing-library/dom": "^10.0.0",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
