@@ -1,5 +1,7 @@
 # @mano8/astro-prompt-m8
 
+![CI/CD](https://github.com/mano8/astro-prompt-m8/actions/workflows/CI.yaml/badge.svg?branch=main)
+
 Astro integration and headless client for [`prompt-engine-m8`]. The prompt-side
 analog of `@mano8/astro-media-m8`: typed Zod schemas, API wrappers for the full
 prompt contract, a compose helper, optional React provider/hooks, and injectable
