@@ -4,21 +4,6 @@
   "homepage": "https://github.com/mano8/astro-prompt-m8",
   "items": [
     {
-      "name": "data-table",
-      "type": "registry:component",
-      "title": "Data Table",
-      "description": "Generic shadcn data table (search, filters, sorting, pagination, row selection, and column visibility) built on @tanstack/react-table.",
-      "dependencies": ["@tanstack/react-table", "lucide-react"],
-      "registryDependencies": ["table", "button", "input", "select", "dropdown-menu"],
-      "files": [
-        {
-          "path": "registry/blocks/data-table/data-table.tsx",
-          "type": "registry:component",
-          "target": "components/fa-prompt/data-table.tsx"
-        }
-      ]
-    },
-    {
       "name": "prompt-block-editor",
       "type": "registry:component",
       "title": "Prompt Block Editor",
@@ -35,7 +20,7 @@
         "input",
         "select",
         "textarea",
-        "./node_modules/@mano8/astro-prompt-m8/registry/r/data-table.json"
+        "./node_modules/@mano8/astro-ui-m8/registry/r/data-table.json"
       ],
       "files": [
         {
@@ -63,7 +48,7 @@
         "input",
         "select",
         "textarea",
-        "./node_modules/@mano8/astro-prompt-m8/registry/r/data-table.json"
+        "./node_modules/@mano8/astro-ui-m8/registry/r/data-table.json"
       ],
       "files": [
         {

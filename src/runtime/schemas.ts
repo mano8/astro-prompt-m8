@@ -211,6 +211,130 @@ export const CategoryUpdateSchema = CategoryCreateSchema;
 export type CategoryUpdate = z.infer<typeof CategoryUpdateSchema>;
 
 // ---------------------------------------------------------------------------
+// Portable import/export (user-agnostic block/template transfer)
+//
+// A portable payload strips server-owned identity (`id`, `owner_id`,
+// template-link ids) so an export produced by one user can be imported by any
+// other. Dedup on import is keyed on `slug`. See `runtime/api/transfer.ts`.
+// ---------------------------------------------------------------------------
+
+export const PROMPT_EXPORT_FORMAT = "astro-prompt-m8/export" as const;
+export const PROMPT_EXPORT_VERSION = 1 as const;
+
+/** A block without server identity — safe to hand to another user's account. */
+export const PortableBlockSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    slug: z.string().min(1).max(100).nullable().optional(),
+    description: z.string().max(1000).nullable().optional(),
+    content: z.string().min(1).max(5000),
+    type: PromptBlockTypeSchema,
+    is_dynamic: z.boolean().default(false),
+    is_public: z.boolean().default(false)
+  })
+  .strict();
+export type PortableBlock = z.infer<typeof PortableBlockSchema>;
+
+/** A template's block reference: its ordering plus the self-contained block. */
+export const PortableTemplateBlockSchema = z
+  .object({
+    position: z.number().int().nonnegative(),
+    block: PortableBlockSchema
+  })
+  .strict();
+export type PortableTemplateBlock = z.infer<typeof PortableTemplateBlockSchema>;
+
+/** A template without server identity, carrying its full block definitions. */
+export const PortableTemplateSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    slug: z.string().min(1).max(100).nullable().optional(),
+    description: z.string().max(1000).nullable().optional(),
+    is_public: z.boolean().default(false),
+    blocks: z.array(PortableTemplateBlockSchema).default([])
+  })
+  .strict();
+export type PortableTemplate = z.infer<typeof PortableTemplateSchema>;
+
+/** The top-level JSON envelope written by export / read by import. */
+export const PromptExportSchema = z
+  .object({
+    format: z.literal(PROMPT_EXPORT_FORMAT),
+    version: z.literal(PROMPT_EXPORT_VERSION),
+    exportedAt: z.string(),
+    blocks: z.array(PortableBlockSchema).default([]),
+    templates: z.array(PortableTemplateSchema).default([])
+  })
+  .strict();
+export type PromptExport = z.infer<typeof PromptExportSchema>;
+
+type BlockLike = {
+  name: string;
+  slug?: string | null;
+  description: string | null;
+  content: string;
+  type: PromptBlockType;
+  is_dynamic: boolean;
+  is_public: boolean;
+};
+
+/** Strip server identity (`id`, `owner_id`, link ids) from a block. */
+export function toPortableBlock(block: BlockLike): PortableBlock {
+  return {
+    name: block.name,
+    slug: block.slug ?? null,
+    description: block.description,
+    content: block.content,
+    type: block.type,
+    is_dynamic: block.is_dynamic,
+    is_public: block.is_public
+  };
+}
+
+/** Strip server identity from a template, ordering its blocks by position. */
+export function toPortableTemplate(template: PromptTemplatePublic): PortableTemplate {
+  return {
+    name: template.name,
+    slug: template.slug,
+    description: template.description,
+    is_public: template.is_public,
+    blocks: [...template.blocks]
+      .sort((left, right) => left.position - right.position)
+      .map((block) => ({ position: block.position, block: toPortableBlock(block) }))
+  };
+}
+
+/** Wrap portable blocks/templates in a versioned export envelope. */
+export function buildPromptExport(
+  parts: { blocks?: PortableBlock[]; templates?: PortableTemplate[] },
+  exportedAt: string = new Date().toISOString()
+): PromptExport {
+  return {
+    format: PROMPT_EXPORT_FORMAT,
+    version: PROMPT_EXPORT_VERSION,
+    exportedAt,
+    blocks: parts.blocks ?? [],
+    templates: parts.templates ?? []
+  };
+}
+
+/** Validate untrusted JSON as a PromptExport (throws on malformed input). */
+export function parsePromptExport(input: unknown): PromptExport {
+  return PromptExportSchema.parse(input);
+}
+
+/** Pretty-print an export for download. */
+export function serializePromptExport(data: PromptExport): string {
+  return JSON.stringify(data, null, 2);
+}
+
+/** Slug-based, collision-safe filename for a downloaded export. */
+export function promptExportFilename(kind: "block" | "template" | "bundle", slug?: string | null): string {
+  const safe = (slug ?? "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase();
+  return `prompt-${kind}${safe ? `-${safe}` : ""}.json`;
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard (mirror schemas/dashboard.py UsersActivity)
 // ---------------------------------------------------------------------------
 
@@ -247,11 +371,27 @@ export type UsersActivity = z.infer<typeof UsersActivitySchema>;
 export type PromptBlockListParams = {
   skip?: number;
   limit?: number;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  csrc?: string;
+  vsrc?: string;
+  f?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 };
 
 export type PromptTemplateListParams = {
   skip?: number;
   limit?: number;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  csrc?: string;
+  vsrc?: string;
+  f?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 };
 
 export type CategoryListParams = {

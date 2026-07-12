@@ -2,8 +2,10 @@ import * as React from "react";
 import { usePromptBlocks } from "../hooks/usePromptBlocks.js";
 import { usePromptTemplates } from "../hooks/usePromptTemplates.js";
 import { useComposePrompt } from "../hooks/useComposePrompt.js";
+import { usePromptTransfer } from "../hooks/usePromptTransfer.js";
 import { copyTextToClipboard, type ClipboardCopyState } from "./clipboard.js";
-import type { PromptBlockPublic } from "../schemas.js";
+import { downloadPromptExport, readPromptExportFile } from "./transfer-file.js";
+import { promptExportFilename, type PromptBlockPublic } from "../schemas.js";
 
 export interface PromptTemplateEditorLabels {
   title: string;
@@ -38,6 +40,9 @@ export interface PromptTemplateEditorLabels {
   dynamicPlaceholder: string;
   missingDynamic: string;
   noDynamic: string;
+  exportLabel: string;
+  importLabel: string;
+  importError: string;
 }
 
 const DEFAULT_LABELS: PromptTemplateEditorLabels = {
@@ -72,7 +77,10 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   dynamicFor: "Dynamic content for",
   dynamicPlaceholder: "Replacement value",
   missingDynamic: "Enter every dynamic replacement value.",
-  noDynamic: "This template has no dynamic blocks."
+  noDynamic: "This template has no dynamic blocks.",
+  exportLabel: "Export",
+  importLabel: "Import",
+  importError: "Could not import file."
 };
 
 type DraftState = {
@@ -90,11 +98,7 @@ type ComposableBlock = {
   is_dynamic: boolean;
 };
 
-function compactBlockWhitespace(content: string): string {
-  return content.replace(/\s+/g, " ").trim();
-}
-
-function compactComposedPrompt(
+function renderComposedPrompt(
   blocks: ComposableBlock[],
   dynamicFields: Record<number, string>,
   fallbackContent: string
@@ -109,9 +113,8 @@ function compactComposedPrompt(
         ? block.content.split("{{dynamic_content}}").join(replacement)
         : replacement;
     })
-    .map(compactBlockWhitespace)
     .filter((part) => part.trim() !== "")
-    .join(" ");
+    .join("");
 
   return content || fallbackContent.trim();
 }
@@ -124,7 +127,10 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
   const t: PromptTemplateEditorLabels = { ...DEFAULT_LABELS, ...labels };
   const templates = usePromptTemplates();
   const blocks = usePromptBlocks();
+  const { exportTemplateMutation, importMutation } = usePromptTransfer();
 
+  const [transferStatus, setTransferStatus] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = React.useState<DraftState | null>(null);
   const [expandedId, setExpandedId] = React.useState<number | null>(null);
   const [composeError, setComposeError] = React.useState<string | null>(null);
@@ -178,6 +184,28 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
     if (expandedId === id) setExpandedId(null);
   };
 
+  const exportTemplate = async (id: number, slug: string) => {
+    setTransferStatus(null);
+    const payload = await exportTemplateMutation.mutateAsync(id);
+    downloadPromptExport(payload, promptExportFilename("template", slug));
+  };
+
+  const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setTransferStatus(null);
+    try {
+      const parsed = await readPromptExportFile(file);
+      const result = await importMutation.mutateAsync(parsed);
+      const created = result.templates.created.length;
+      const skipped = result.templates.skipped.length;
+      setTransferStatus(`Imported ${created} template(s), ${skipped} skipped (already exist).`);
+    } catch {
+      setTransferStatus(t.importError);
+    }
+  };
+
   const availableToAdd = (templateId: number): PromptBlockPublic[] => {
     const tpl = templates.data?.data.find((item) => item.id === templateId);
     const used = new Set((tpl?.blocks ?? []).map((b) => b.block_id));
@@ -191,14 +219,37 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
           <p className="text-sm text-muted-foreground">{t.subtitle}</p>
         </div>
-        <button
-          type="button"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-          onClick={startCreate}
-        >
-          {t.create}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
+            disabled={importMutation.isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {t.importLabel}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={onImportFile}
+          />
+          <button
+            type="button"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            onClick={startCreate}
+          >
+            {t.create}
+          </button>
+        </div>
       </div>
+
+      {transferStatus ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {transferStatus}
+        </p>
+      ) : null}
 
       {draft ? (
         <form
@@ -211,7 +262,7 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
           <label className="block space-y-1 text-sm">
             <span className="font-medium">{t.name}</span>
             <input
-              className="w-full rounded-md border bg-background px-3 py-2"
+              className="w-full rounded-md border bg-background px-3 py-3"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               required
@@ -220,7 +271,7 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
           <label className="block space-y-1 text-sm">
             <span className="font-medium">{t.description}</span>
             <input
-              className="w-full rounded-md border bg-background px-3 py-2"
+              className="w-full rounded-md border bg-background px-3 py-3"
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
             />
@@ -275,6 +326,14 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border px-3 py-1 text-xs font-medium disabled:opacity-50"
+                    disabled={exportTemplateMutation.isPending}
+                    onClick={() => void exportTemplate(tpl.id, tpl.slug)}
+                  >
+                    {t.exportLabel}
+                  </button>
                   <button
                     type="button"
                     className="rounded-md border px-3 py-1 text-xs font-medium"
@@ -426,9 +485,7 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
                                 content: composerDynamic[block.block_id] ?? ""
                               }))
                           );
-                          setComposerResult(
-                            compactComposedPrompt(tpl.blocks, composerDynamic, result.content)
-                          );
+                          setComposerResult(renderComposedPrompt(tpl.blocks, composerDynamic, result.content));
                         } catch {
                           setComposerResult(null);
                           setComposeError(t.composingError);
@@ -442,6 +499,7 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
                           setCopyState(copied ? "copied" : "error")
                         )
                       }
+                      onResultChange={setComposerResult}
                       busy={composerId === tpl.id && composeMutation.isPending}
                     />
                   </div>
@@ -478,6 +536,7 @@ function ComposeInline({
   error,
   copyState,
   onCopy,
+  onResultChange,
   busy
 }: {
   templateId: number;
@@ -492,6 +551,7 @@ function ComposeInline({
   error: string | null;
   copyState: ClipboardCopyState;
   onCopy: (content: string) => Promise<void>;
+  onResultChange: (content: string) => void;
   busy: boolean;
 }) {
   const dynamic = blocks.filter((b) => b.is_dynamic);
@@ -569,9 +629,11 @@ function ComposeInline({
               ) : null}
             </div>
           </div>
-          <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs">
-            {composeResult}
-          </pre>
+          <textarea
+            className="min-h-32 w-full rounded-md border bg-background p-3 text-xs"
+            value={composeResult}
+            onChange={(event) => onResultChange(event.target.value)}
+          />
         </div>
       ) : null}
     </div>

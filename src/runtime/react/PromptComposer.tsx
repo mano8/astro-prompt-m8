@@ -65,6 +65,7 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
   const { compose, composeMutation } = useComposePrompt();
   const [dynamic, setDynamic] = React.useState<Record<number, string>>({});
   const [dynamicError, setDynamicError] = React.useState<string | null>(null);
+  const [composedContent, setComposedContent] = React.useState("");
   const [copyState, setCopyState] = React.useState<ClipboardCopyState>("idle");
 
   const selected = template.data ?? null;
@@ -80,6 +81,7 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
 
   React.useEffect(() => {
     setCopyState("idle");
+    setComposedContent(composeMutation.data?.content ?? "");
   }, [composeMutation.data?.content]);
 
   const dynamicBlocks = blocks.filter((b) => b.is_dynamic);
@@ -195,7 +197,7 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
                     type="button"
                     className="rounded-md border px-3 py-1 text-xs font-medium"
                     onClick={() => {
-                      void copyTextToClipboard(composeMutation.data.content).then((copied) =>
+                      void copyTextToClipboard(composedContent).then((copied) =>
                         setCopyState(copied ? "copied" : "error")
                       );
                     }}
@@ -216,9 +218,11 @@ export function PromptComposer({ templateId: initialTemplateId, labels }: Prompt
                   ) : null}
                 </div>
               </div>
-              <pre className="whitespace-pre-wrap rounded-md border bg-muted/30 p-4 text-sm">
-                {composeMutation.data.content}
-              </pre>
+              <textarea
+                className="min-h-40 w-full rounded-md border bg-background p-4 text-sm"
+                value={composedContent}
+                onChange={(event) => setComposedContent(event.target.value)}
+              />
             </div>
           ) : null}
         </div>

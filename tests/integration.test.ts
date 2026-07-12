@@ -109,6 +109,26 @@ describe("faPrompt integration", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
+  it("injects package starter route entrypoints for Starlight pages", () => {
+    const { injectRoute } = runSetup({ mode: "starter", auth: { provider: "none" } });
+    expect(injectRoute).toHaveBeenCalledWith({
+      pattern: "/prompt/blocks",
+      entrypoint: "@mano8/astro-prompt-m8/routes/blocks.astro"
+    });
+    expect(injectRoute).toHaveBeenCalledWith({
+      pattern: "/prompt/templates",
+      entrypoint: "@mano8/astro-prompt-m8/routes/templates.astro"
+    });
+    expect(injectRoute).toHaveBeenCalledWith({
+      pattern: "/prompt/composer",
+      entrypoint: "@mano8/astro-prompt-m8/routes/composer.astro"
+    });
+    expect(injectRoute).toHaveBeenCalledWith({
+      pattern: "/admin/prompts",
+      entrypoint: "@mano8/astro-prompt-m8/routes/admin/prompts.astro"
+    });
+  });
+
   it("warns when the auth plugin is registered after prompt", () => {
     const { logger } = runSetup(
       { mode: "starter" },

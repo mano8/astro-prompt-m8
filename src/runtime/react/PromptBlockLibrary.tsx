@@ -1,8 +1,11 @@
 import * as React from "react";
 import { usePromptBlocks } from "../hooks/usePromptBlocks.js";
+import { usePromptTransfer } from "../hooks/usePromptTransfer.js";
+import { downloadPromptExport, readPromptExportFile } from "./transfer-file.js";
 import {
   hasDynamicContentPlaceholder,
   insertDynamicContentPlaceholder,
+  promptExportFilename,
   type PromptBlockPublic
 } from "../schemas.js";
 
@@ -37,6 +40,9 @@ export interface PromptBlockLibraryLabels {
   blockTypeInstruction: string;
   blockTypeExample: string;
   blockTypeFormat: string;
+  exportLabel: string;
+  importLabel: string;
+  importError: string;
 }
 
 const DEFAULT_LABELS: PromptBlockLibraryLabels = {
@@ -69,7 +75,10 @@ const DEFAULT_LABELS: PromptBlockLibraryLabels = {
   blockTypeContext: "Context",
   blockTypeInstruction: "Instruction",
   blockTypeExample: "Example",
-  blockTypeFormat: "Format"
+  blockTypeFormat: "Format",
+  exportLabel: "Export",
+  importLabel: "Import",
+  importError: "Could not import file."
 };
 
 type PromptBlockTypeExtension = "role" | "task" | "context" | "instruction" | "example" | "format";
@@ -127,10 +136,13 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
   const t: PromptBlockLibraryLabels = { ...DEFAULT_LABELS, ...labels };
   const { data, loading, error, createMutation, updateMutation, deleteMutation, refresh } =
     usePromptBlocks();
+  const { exportBlockMutation, importMutation } = usePromptTransfer();
   const [draft, setDraft] = React.useState<DraftState | null>(null);
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [draftError, setDraftError] = React.useState<string | null>(null);
+  const [transferStatus, setTransferStatus] = React.useState<string | null>(null);
   const contentRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
     void refresh();
@@ -192,6 +204,28 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
     await deleteMutation.mutateAsync(id);
   };
 
+  const exportBlock = async (block: PromptBlockPublic) => {
+    setTransferStatus(null);
+    const payload = await exportBlockMutation.mutateAsync(block.id);
+    downloadPromptExport(payload, promptExportFilename("block", block.slug));
+  };
+
+  const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setTransferStatus(null);
+    try {
+      const parsed = await readPromptExportFile(file);
+      const result = await importMutation.mutateAsync(parsed);
+      const created = result.blocks.created.length;
+      const reused = result.blocks.reused.length;
+      setTransferStatus(`Imported ${created} new, ${reused} reused.`);
+    } catch {
+      setTransferStatus(t.importError);
+    }
+  };
+
   return (
     <section className="not-content space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -199,18 +233,41 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
           <p className="text-sm text-muted-foreground">{t.subtitle}</p>
         </div>
-        <button
-          type="button"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-          onClick={() => {
-            setEditingId(null);
-            setDraftError(null);
-            setDraft({ ...EMPTY_DRAFT });
-          }}
-        >
-          {t.create}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
+            disabled={importMutation.isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {t.importLabel}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={onImportFile}
+          />
+          <button
+            type="button"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            onClick={() => {
+              setEditingId(null);
+              setDraftError(null);
+              setDraft({ ...EMPTY_DRAFT });
+            }}
+          >
+            {t.create}
+          </button>
+        </div>
       </div>
+
+      {transferStatus ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {transferStatus}
+        </p>
+      ) : null}
 
       {loading && !data ? <p className="text-sm">{t.loading}</p> : null}
       {error && !data ? (
@@ -344,6 +401,14 @@ export function PromptBlockLibrary({ labels }: PromptBlockLibraryProps) {
                 </p>
               </div>
               <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border px-3 py-1 text-xs font-medium disabled:opacity-50"
+                  disabled={exportBlockMutation.isPending}
+                  onClick={() => void exportBlock(block)}
+                >
+                  {t.exportLabel}
+                </button>
                 <button
                   type="button"
                   className="rounded-md border px-3 py-1 text-xs font-medium"

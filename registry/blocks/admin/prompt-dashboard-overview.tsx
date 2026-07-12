@@ -107,7 +107,7 @@ export function PromptDashboardOverview({ labels }: PromptDashboardOverviewProps
 
   return (
     <div className="not-content space-y-6">
-      <div className="space-y-1 pb-3">
+      <div className="space-y-2 pb-3">
         <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
         <p className="text-sm text-muted-foreground">{t.subtitle}</p>
       </div>
@@ -145,9 +145,9 @@ export function PromptDashboardOverview({ labels }: PromptDashboardOverviewProps
           ) : counters.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">{t.activityEmpty}</p>
           ) : (
-            <ul className="space-y-1 text-sm">
+            <ul className="space-y-3 text-sm">
               {counters.map((c) => (
-                <li key={c.model} className="flex justify-between border-b pb-1">
+                <li key={c.model} className="flex justify-between border-b pb-3">
                   <span>{t.activityModel}: {c.model}</span>
                   <span className="tabular-nums">+{c.added} · ↻{c.updated}</span>
                 </li>

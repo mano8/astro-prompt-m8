@@ -5,17 +5,26 @@
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, Plus } from "lucide-react";
+import { Download, Plus, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { usePromptBlocks } from "@mano8/astro-prompt-m8/hooks";
+import { usePromptBlocks, usePromptTransfer } from "@mano8/astro-prompt-m8/hooks";
 import {
+  buildPromptExport,
   hasDynamicContentPlaceholder,
   insertDynamicContentPlaceholder,
+  promptExportFilename,
+  toPortableBlock,
   type PromptBlockPublic,
 } from "@mano8/astro-prompt-m8/schemas";
+import { downloadPromptExport, readPromptExportFile } from "@mano8/astro-prompt-m8/react";
 
-import { DataTable, type DataTableFilter } from "@/components/fa-prompt/data-table";
+import {
+  DataTable,
+  type DataTableFilterOptions,
+  type DataTableSortDirection,
+} from "@/components/m8-ui/data-table";
+import { DataTableColumnHeader } from "@/components/m8-ui/data-table-column-header";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -84,6 +93,10 @@ export interface PromptBlockEditorLabels {
   allPublic: string;
   columns: string;
   selected: (selected: number, total: number) => string;
+  exportLabel: string;
+  exportAllLabel: string;
+  importLabel: string;
+  importError: string;
 }
 
 const DEFAULT_LABELS: PromptBlockEditorLabels = {
@@ -114,14 +127,38 @@ const DEFAULT_LABELS: PromptBlockEditorLabels = {
   allPublic: "Public + private",
   columns: "Columns",
   selected: (selected, total) => `${selected} of ${total} selected`,
+  exportLabel: "Export",
+  exportAllLabel: "Export all",
+  importLabel: "Import",
+  importError: "Could not import file.",
 };
 
 const blockTypes = ["role", "task", "context", "instruction", "example", "format"] as const;
+type BlockTableFilter = (typeof blockTypes)[number] | "dynamic" | "static" | "public" | "private";
+type BlockSort = "name" | "type" | "dynamic" | "visibility";
+
+interface BlockTableParams {
+  page: number;
+  pageSize: number;
+  q: string;
+  f: string;
+  sort: BlockSort;
+  order: DataTableSortDirection;
+}
+
+const DEFAULT_TABLE_PARAMS: BlockTableParams = {
+  page: 1,
+  pageSize: 10,
+  q: "",
+  f: "",
+  sort: "name",
+  order: "asc",
+};
 const blockFormSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
     description: z.string().trim().max(1000).optional(),
-    content: z.string().trim().min(1).max(5000),
+    content: z.string().min(1).max(5000).refine((value) => value.trim().length > 0),
     type: z.enum(blockTypes),
     is_dynamic: z.boolean(),
     is_public: z.boolean(),
@@ -158,9 +195,14 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
   const t = { ...DEFAULT_LABELS, ...labels };
   const { data, loading, error, createMutation, updateMutation, deleteMutation, refresh } =
     usePromptBlocks();
+  const { exportBlockMutation, importMutation } = usePromptTransfer();
   const [editing, setEditing] = React.useState<PromptBlockPublic | null>(null);
   const [open, setOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PromptBlockPublic | null>(null);
+  const [transferStatus, setTransferStatus] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [tableParams, setTableParams] =
+    React.useState<BlockTableParams>(DEFAULT_TABLE_PARAMS);
 
   const form = useForm<BlockFormValues>({
     resolver: zodResolver(blockFormSchema),
@@ -205,6 +247,37 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     setEditing(null);
   };
 
+  const exportBlock = async (block: PromptBlockPublic) => {
+    setTransferStatus(null);
+    const payload = await exportBlockMutation.mutateAsync(block.id);
+    downloadPromptExport(payload, promptExportFilename("block", block.slug));
+  };
+
+  const exportAllBlocks = () => {
+    const allBlocks = data?.data ?? [];
+    if (allBlocks.length === 0) return;
+    setTransferStatus(null);
+    const payload = buildPromptExport({ blocks: allBlocks.map(toPortableBlock) });
+    downloadPromptExport(payload, promptExportFilename("bundle"));
+    setTransferStatus(`Exported ${allBlocks.length} block(s).`);
+  };
+
+  const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setTransferStatus(null);
+    try {
+      const parsed = await readPromptExportFile(file);
+      const result = await importMutation.mutateAsync(parsed);
+      setTransferStatus(
+        `Imported ${result.blocks.created.length} new, ${result.blocks.reused.length} reused.`,
+      );
+    } catch {
+      setTransferStatus(t.importError);
+    }
+  };
+
   const columns = React.useMemo<ColumnDef<PromptBlockPublic>[]>(
     () => [
       {
@@ -232,11 +305,9 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
       {
         accessorKey: "name",
         header: ({ column }) => (
-          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            {t.name}
-            <ArrowUpDown className="ml-2 size-4" />
-          </Button>
+          <DataTableColumnHeader column={column} title={t.name} />
         ),
+        enableSorting: true,
       },
       {
         id: "actions",
@@ -244,6 +315,16 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
         enableHiding: false,
         cell: ({ row }) => (
           <div className="flex min-w-32 flex-wrap gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => void exportBlock(row.original)}
+            >
+              <Download className="mr-1 size-3.5" />
+              {t.exportLabel}
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -265,11 +346,18 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
           </div>
         ),
       },
-      { accessorKey: "type", header: t.type },
+      {
+        accessorKey: "type",
+        header: ({ column }) => <DataTableColumnHeader column={column} title={t.type} />,
+        enableSorting: true,
+      },
       {
         accessorFn: (row) => (row.is_dynamic ? "dynamic" : "static"),
         id: "dynamic",
-        header: t.dynamicLabel,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t.dynamicLabel} />
+        ),
+        enableSorting: true,
         cell: ({ row }) => (
           <Badge variant={row.original.is_dynamic ? "default" : "secondary"}>
             {formatBool(row.original.is_dynamic, "Dynamic", "Static")}
@@ -279,7 +367,10 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
       {
         accessorFn: (row) => (row.is_public ? "public" : "private"),
         id: "visibility",
-        header: t.publicLabel,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t.publicLabel} />
+        ),
+        enableSorting: true,
         cell: ({ row }) => (
           <Badge variant={row.original.is_public ? "default" : "outline"}>
             {formatBool(row.original.is_public, "Public", "Private")}
@@ -308,45 +399,105 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     [t],
   );
 
-  const filters: DataTableFilter[] = [
-    {
-      columnId: "type",
-      label: t.type,
-      allLabel: t.allTypes,
-      options: blockTypes.map((type) => ({ label: type, value: type })),
-    },
-    {
-      columnId: "dynamic",
-      label: t.dynamicLabel,
-      allLabel: t.allDynamic,
-      options: [
-        { label: "Dynamic", value: "dynamic" },
-        { label: "Static", value: "static" },
-      ],
-    },
-    {
-      columnId: "visibility",
-      label: t.publicLabel,
-      allLabel: t.allPublic,
-      options: [
-        { label: "Public", value: "public" },
-        { label: "Private", value: "private" },
-      ],
-    },
-  ];
+  const filterOptions: DataTableFilterOptions = {
+    title: t.type,
+    options: [
+      ...blockTypes.map((type) => ({ label: type, value: type })),
+      { label: "Dynamic", value: "dynamic" },
+      { label: "Static", value: "static" },
+      { label: "Public", value: "public" },
+      { label: "Private", value: "private" },
+    ],
+  };
+
+  const filteredBlocks = React.useMemo(() => {
+    const q = tableParams.q.trim().toLowerCase();
+    const rows = (data?.data ?? []).filter((block) => {
+      const matchesQuery =
+        q === "" ||
+        block.name.toLowerCase().includes(q) ||
+        block.description?.toLowerCase().includes(q) ||
+        block.content.toLowerCase().includes(q);
+      const activeFilters = tableParams.f ? tableParams.f.split(",") : [];
+      const matchesFilter =
+        activeFilters.length === 0 ||
+        activeFilters.some((filter) => {
+          if (filter === "dynamic") return block.is_dynamic;
+          if (filter === "static") return !block.is_dynamic;
+          if (filter === "public") return block.is_public;
+          if (filter === "private") return !block.is_public;
+          return block.type === filter;
+        });
+      return matchesQuery && matchesFilter;
+    });
+    const direction = tableParams.order === "desc" ? -1 : 1;
+    return rows.sort((left, right) => {
+      const leftValue =
+        tableParams.sort === "dynamic"
+          ? String(left.is_dynamic)
+          : tableParams.sort === "visibility"
+            ? String(left.is_public)
+            : String(left[tableParams.sort]);
+      const rightValue =
+        tableParams.sort === "dynamic"
+          ? String(right.is_dynamic)
+          : tableParams.sort === "visibility"
+            ? String(right.is_public)
+            : String(right[tableParams.sort]);
+      return leftValue.localeCompare(rightValue) * direction;
+    });
+  }, [data?.data, tableParams]);
+
+  const pagedBlocks = React.useMemo(() => {
+    const start = (tableParams.page - 1) * tableParams.pageSize;
+    return filteredBlocks.slice(start, start + tableParams.pageSize);
+  }, [filteredBlocks, tableParams.page, tableParams.pageSize]);
 
   return (
     <section className="not-content space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-2 pb-3">
-        <div className="space-y-1">
+      <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
+        <div className="space-y-2">
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
           <p className="text-sm text-muted-foreground">{t.subtitle}</p>
         </div>
-        <Button type="button" onClick={startCreate}>
-          <Plus className="mr-2 size-4" />
-          {t.create}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={(data?.data.length ?? 0) === 0}
+            onClick={exportAllBlocks}
+          >
+            <Download className="mr-2 size-4" />
+            {t.exportAllLabel}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={importMutation.isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="mr-2 size-4" />
+            {t.importLabel}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={onImportFile}
+          />
+          <Button type="button" onClick={startCreate}>
+            <Plus className="mr-2 size-4" />
+            {t.create}
+          </Button>
+        </div>
       </div>
+
+      {transferStatus ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {transferStatus}
+        </p>
+      ) : null}
 
       {loading && !data ? <p className="text-sm text-muted-foreground">{t.loading}</p> : null}
       {error && !data ? (
@@ -358,13 +509,48 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
       <DataTable
         key="prompt-block-table-actions-v2"
         columns={columns}
-        data={data?.data ?? []}
-        searchColumn="name"
-        searchPlaceholder={t.search}
-        filters={filters}
-        emptyMessage={t.empty}
-        columnsLabel={t.columns}
-        selectedLabel={t.selected}
+        data={pagedBlocks}
+        loading={loading}
+        rowCount={filteredBlocks.length}
+        page={tableParams.page}
+        pageSize={tableParams.pageSize}
+        onPageChange={(page) => setTableParams((current) => ({ ...current, page }))}
+        onPageSizeChange={(pageSize) =>
+          setTableParams((current) => ({ ...current, page: 1, pageSize }))
+        }
+        sortBy={tableParams.sort}
+        sortDir={tableParams.order}
+        onSortChange={(sort, order) =>
+          setTableParams((current) => ({
+            ...current,
+            page: 1,
+            sort: (sort as BlockSort | undefined) ?? DEFAULT_TABLE_PARAMS.sort,
+            order: order ?? DEFAULT_TABLE_PARAMS.order,
+          }))
+        }
+        q={tableParams.q}
+        onSearchChange={(q) => setTableParams((current) => ({ ...current, page: 1, q }))}
+        f={tableParams.f}
+        onFilterChange={(f) =>
+          setTableParams((current) => ({
+            ...current,
+            page: 1,
+            f,
+          }))
+        }
+        filterOptions={filterOptions}
+        labels={{
+          loading: t.loading,
+          empty: t.empty,
+          toolbar: {
+            search: t.search,
+            reset: "Reset",
+            viewOptions: { view: t.columns, toggleColumns: t.columns },
+          },
+          pagination: {
+            selectedRows: t.selected,
+          },
+        }}
       />
 
       <Dialog open={open} onOpenChange={setOpen}>

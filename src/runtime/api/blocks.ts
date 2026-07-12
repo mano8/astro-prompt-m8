@@ -1,4 +1,5 @@
 import { request } from "../client.js";
+import { listParamsToOffset } from "../listParams.js";
 import {
   PromptBlocksPublicSchema,
   ResponseMessageSchema,
@@ -13,10 +14,14 @@ import {
 } from "../schemas.js";
 
 export async function listBlocks(params: PromptBlockListParams = {}): Promise<PromptBlocksPublic> {
+  const offset =
+    params.page !== undefined && params.pageSize !== undefined
+      ? listParamsToOffset({ page: params.page, pageSize: params.pageSize })
+      : { skip: params.skip ?? 0, limit: params.limit ?? 100 };
   return request({
     method: "GET",
     path: "/prompt-block/",
-    query: { skip: params.skip ?? 0, limit: params.limit ?? 100 },
+    query: offset,
     schema: PromptBlocksPublicSchema,
     auth: true
   });

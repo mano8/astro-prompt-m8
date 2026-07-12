@@ -5,17 +5,31 @@
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Copy, FileText, Plus, Wand2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Download, FileText, Plus, Upload, Wand2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { usePromptBlocks, usePromptTemplates, useComposePrompt } from "@mano8/astro-prompt-m8/hooks";
-import type {
-  PromptBlockPublic,
-  PromptTemplatePublic,
-  TemplateBlockPublic,
+import {
+  usePromptBlocks,
+  usePromptTemplates,
+  useComposePrompt,
+  usePromptTransfer,
+} from "@mano8/astro-prompt-m8/hooks";
+import {
+  buildPromptExport,
+  promptExportFilename,
+  toPortableTemplate,
+  type PromptBlockPublic,
+  type PromptTemplatePublic,
+  type TemplateBlockPublic,
 } from "@mano8/astro-prompt-m8/schemas";
+import { downloadPromptExport, readPromptExportFile } from "@mano8/astro-prompt-m8/react";
 
-import { DataTable, type DataTableFilter } from "@/components/fa-prompt/data-table";
+import {
+  DataTable,
+  type DataTableFilterOptions,
+  type DataTableSortDirection,
+} from "@/components/m8-ui/data-table";
+import { DataTableColumnHeader } from "@/components/m8-ui/data-table-column-header";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -98,6 +112,10 @@ export interface PromptTemplateEditorLabels {
   allTypes: string;
   columns: string;
   selected: (selected: number, total: number) => string;
+  exportLabel: string;
+  exportAllLabel: string;
+  importLabel: string;
+  importError: string;
 }
 
 const DEFAULT_LABELS: PromptTemplateEditorLabels = {
@@ -141,6 +159,10 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   allTypes: "All types",
   columns: "Columns",
   selected: (selected, total) => `${selected} of ${total} selected`,
+  exportLabel: "Export",
+  exportAllLabel: "Export all",
+  importLabel: "Import",
+  importError: "Could not import file.",
 };
 
 const templateFormSchema = z.object({
@@ -157,6 +179,35 @@ const emptyValues: TemplateFormValues = {
 };
 
 const blockTypes = ["role", "task", "context", "instruction", "example", "format"] as const;
+type TemplateSort = "name" | "visibility" | "block_count";
+type TemplateBlockSort = "name" | "type" | "dynamic" | "visibility" | "position";
+
+interface TemplateTableParams<TSort extends string> {
+  page: number;
+  pageSize: number;
+  q: string;
+  f: string;
+  sort: TSort;
+  order: DataTableSortDirection;
+}
+
+const DEFAULT_TEMPLATE_TABLE_PARAMS: TemplateTableParams<TemplateSort> = {
+  page: 1,
+  pageSize: 10,
+  q: "",
+  f: "",
+  sort: "name",
+  order: "asc",
+};
+
+const DEFAULT_BLOCK_TABLE_PARAMS: TemplateTableParams<TemplateBlockSort> = {
+  page: 1,
+  pageSize: 10,
+  q: "",
+  f: "",
+  sort: "position",
+  order: "asc",
+};
 type ClipboardCopyState = "idle" | "copied" | "error";
 
 type ComposableBlock = Pick<TemplateBlockPublic, "block_id" | "content" | "is_dynamic">;
@@ -175,11 +226,7 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function compactBlockWhitespace(content: string): string {
-  return content.replace(/\s+/g, " ").trim();
-}
-
-function compactComposedPrompt(
+function renderComposedPrompt(
   blocks: ComposableBlock[],
   dynamicFields: Record<number, string>,
   fallbackContent: string,
@@ -194,9 +241,8 @@ function compactComposedPrompt(
         ? block.content.split("{{dynamic_content}}").join(replacement)
         : replacement;
     })
-    .map(compactBlockWhitespace)
     .filter((part) => part.trim() !== "")
-    .join(" ");
+    .join("");
 
   return content || fallbackContent.trim();
 }
@@ -210,6 +256,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
   const templates = usePromptTemplates();
   const blocks = usePromptBlocks();
   const { compose, composeMutation } = useComposePrompt();
+  const { exportTemplateMutation, importMutation } = usePromptTransfer();
+  const [transferStatus, setTransferStatus] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [editing, setEditing] = React.useState<PromptTemplatePublic | null>(null);
   const [open, setOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PromptTemplatePublic | null>(null);
@@ -220,6 +269,10 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
   const [composeError, setComposeError] = React.useState<string | null>(null);
   const [composeContent, setComposeContent] = React.useState<string | null>(null);
   const [copyState, setCopyState] = React.useState<ClipboardCopyState>("idle");
+  const [templateTableParams, setTemplateTableParams] =
+    React.useState<TemplateTableParams<TemplateSort>>(DEFAULT_TEMPLATE_TABLE_PARAMS);
+  const [blockTableParams, setBlockTableParams] =
+    React.useState<TemplateTableParams<TemplateBlockSort>>(DEFAULT_BLOCK_TABLE_PARAMS);
 
   const form = useForm<TemplateFormValues>({
     resolver: zodResolver(templateFormSchema),
@@ -278,6 +331,37 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     setEditing(null);
   };
 
+  const exportTemplate = async (template: PromptTemplatePublic) => {
+    setTransferStatus(null);
+    const payload = await exportTemplateMutation.mutateAsync(template.id);
+    downloadPromptExport(payload, promptExportFilename("template", template.slug));
+  };
+
+  const exportAllTemplates = () => {
+    const allTemplates = templates.data?.data ?? [];
+    if (allTemplates.length === 0) return;
+    setTransferStatus(null);
+    const payload = buildPromptExport({ templates: allTemplates.map(toPortableTemplate) });
+    downloadPromptExport(payload, promptExportFilename("bundle"));
+    setTransferStatus(`Exported ${allTemplates.length} template(s).`);
+  };
+
+  const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setTransferStatus(null);
+    try {
+      const parsed = await readPromptExportFile(file);
+      const result = await importMutation.mutateAsync(parsed);
+      setTransferStatus(
+        `Imported ${result.templates.created.length} template(s), ${result.templates.skipped.length} skipped (already exist).`,
+      );
+    } catch {
+      setTransferStatus(t.importError);
+    }
+  };
+
   const runCompose = async () => {
     if (!activeTemplate) return;
     const dynamicBlocks = activeTemplate.blocks.filter((block) => block.is_dynamic);
@@ -299,7 +383,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
             content: dynamicFields[block.block_id] ?? "",
           })),
       );
-      setComposeContent(compactComposedPrompt(activeTemplate.blocks, dynamicFields, result.content));
+      setComposeContent(renderComposedPrompt(activeTemplate.blocks, dynamicFields, result.content));
     } catch {
       setComposeContent(null);
       setComposeError("Could not compose template.");
@@ -333,11 +417,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorKey: "name",
         header: ({ column }) => (
-          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            {t.name}
-            <ArrowUpDown className="ml-2 size-4" />
-          </Button>
+          <DataTableColumnHeader column={column} title={t.name} />
         ),
+        enableSorting: true,
       },
       {
         id: "actions",
@@ -353,6 +435,16 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               onClick={() => setActiveId(row.original.id)}
             >
               {t.blocks}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => void exportTemplate(row.original)}
+            >
+              <Download className="mr-1 size-3.5" />
+              {t.exportLabel}
             </Button>
             <Button
               type="button"
@@ -378,7 +470,10 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorFn: (row) => (row.is_public ? "public" : "private"),
         id: "visibility",
-        header: t.publicLabel,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t.publicLabel} />
+        ),
+        enableSorting: true,
         cell: ({ row }) => (
           <Badge variant={row.original.is_public ? "default" : "outline"}>
             {row.original.is_public ? "Public" : "Private"}
@@ -388,7 +483,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorFn: (row) => String(row.blocks.length),
         id: "block_count",
-        header: t.blocks,
+        header: ({ column }) => <DataTableColumnHeader column={column} title={t.blocks} />,
+        enableSorting: true,
         cell: ({ row }) => row.original.blocks.length,
       },
       {
@@ -427,11 +523,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorKey: "name",
         header: ({ column }) => (
-          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            {t.name}
-            <ArrowUpDown className="ml-2 size-4" />
-          </Button>
+          <DataTableColumnHeader column={column} title={t.name} />
         ),
+        enableSorting: true,
       },
       {
         id: "actions",
@@ -498,11 +592,16 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
           </div>
         ),
       },
-      { accessorKey: "type", header: t.type },
+      {
+        accessorKey: "type",
+        header: ({ column }) => <DataTableColumnHeader column={column} title={t.type} />,
+        enableSorting: true,
+      },
       {
         accessorFn: (row) => (row.is_dynamic ? "dynamic" : "static"),
         id: "dynamic",
-        header: "Dynamic",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Dynamic" />,
+        enableSorting: true,
         cell: ({ row }) => (
           <Badge variant={row.original.is_dynamic ? "default" : "secondary"}>
             {row.original.is_dynamic ? "Dynamic" : "Static"}
@@ -512,7 +611,10 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       {
         accessorFn: (row) => (row.is_public ? "public" : "private"),
         id: "visibility",
-        header: t.publicLabel,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t.publicLabel} />
+        ),
+        enableSorting: true,
         cell: ({ row }) => (
           <Badge variant={row.original.is_public ? "default" : "outline"}>
             {row.original.is_public ? "Public" : "Private"}
@@ -521,7 +623,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       },
       {
         accessorKey: "position",
-        header: "Position",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Position" />,
+        enableSorting: true,
       },
       {
         accessorKey: "content",
@@ -536,46 +639,156 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     [activeTemplate, t, templates.removeBlockMutation, templates.setPositionMutation],
   );
 
-  const publicFilter: DataTableFilter = {
-    columnId: "visibility",
-    label: t.publicLabel,
-    allLabel: t.allPublic,
+  const publicFilterOptions: DataTableFilterOptions = {
+    title: t.publicLabel,
     options: [
       { label: "Public", value: "public" },
       { label: "Private", value: "private" },
     ],
   };
-  const blockFilters: DataTableFilter[] = [
-    {
-      columnId: "type",
-      label: t.type,
-      allLabel: t.allTypes,
-      options: blockTypes.map((type) => ({ label: type, value: type })),
-    },
-    {
-      columnId: "dynamic",
-      label: "Dynamic",
-      allLabel: t.allDynamic,
-      options: [
-        { label: "Dynamic", value: "dynamic" },
-        { label: "Static", value: "static" },
-      ],
-    },
-    publicFilter,
-  ];
+  const blockFilterOptions: DataTableFilterOptions = {
+    title: t.type,
+    options: [
+      ...blockTypes.map((type) => ({ label: type, value: type })),
+      { label: "Dynamic", value: "dynamic" },
+      { label: "Static", value: "static" },
+      { label: "Public", value: "public" },
+      { label: "Private", value: "private" },
+    ],
+  };
+
+  const filteredTemplates = React.useMemo(() => {
+    const q = templateTableParams.q.trim().toLowerCase();
+    const rows = (templates.data?.data ?? []).filter((template) => {
+      const matchesQuery =
+        q === "" ||
+        template.name.toLowerCase().includes(q) ||
+        template.description?.toLowerCase().includes(q);
+      const activeFilters = templateTableParams.f ? templateTableParams.f.split(",") : [];
+      const matchesFilter =
+        activeFilters.length === 0 ||
+        activeFilters.some((filter) => {
+          if (filter === "public") return template.is_public;
+          if (filter === "private") return !template.is_public;
+          return false;
+        });
+      return matchesQuery && matchesFilter;
+    });
+    const direction = templateTableParams.order === "desc" ? -1 : 1;
+    return rows.sort((left, right) => {
+      const leftValue =
+        templateTableParams.sort === "visibility"
+          ? String(left.is_public)
+          : templateTableParams.sort === "block_count"
+            ? String(left.blocks.length).padStart(8, "0")
+            : left.name;
+      const rightValue =
+        templateTableParams.sort === "visibility"
+          ? String(right.is_public)
+          : templateTableParams.sort === "block_count"
+            ? String(right.blocks.length).padStart(8, "0")
+            : right.name;
+      return leftValue.localeCompare(rightValue) * direction;
+    });
+  }, [templateTableParams, templates.data?.data]);
+
+  const pagedTemplates = React.useMemo(() => {
+    const start = (templateTableParams.page - 1) * templateTableParams.pageSize;
+    return filteredTemplates.slice(start, start + templateTableParams.pageSize);
+  }, [filteredTemplates, templateTableParams.page, templateTableParams.pageSize]);
+
+  const filteredTemplateBlocks = React.useMemo(() => {
+    const q = blockTableParams.q.trim().toLowerCase();
+    const rows = (activeTemplate?.blocks ?? []).filter((block) => {
+      const matchesQuery =
+        q === "" ||
+        block.name.toLowerCase().includes(q) ||
+        block.description?.toLowerCase().includes(q) ||
+        block.content.toLowerCase().includes(q);
+      const activeFilters = blockTableParams.f ? blockTableParams.f.split(",") : [];
+      const matchesFilter =
+        activeFilters.length === 0 ||
+        activeFilters.some((filter) => {
+          if (filter === "dynamic") return block.is_dynamic;
+          if (filter === "static") return !block.is_dynamic;
+          if (filter === "public") return block.is_public;
+          if (filter === "private") return !block.is_public;
+          return block.type === filter;
+        });
+      return matchesQuery && matchesFilter;
+    });
+    const direction = blockTableParams.order === "desc" ? -1 : 1;
+    return rows.sort((left, right) => {
+      const leftValue =
+        blockTableParams.sort === "dynamic"
+          ? String(left.is_dynamic)
+          : blockTableParams.sort === "visibility"
+            ? String(left.is_public)
+            : blockTableParams.sort === "position"
+              ? String(left.position).padStart(8, "0")
+              : String(left[blockTableParams.sort]);
+      const rightValue =
+        blockTableParams.sort === "dynamic"
+          ? String(right.is_dynamic)
+          : blockTableParams.sort === "visibility"
+            ? String(right.is_public)
+            : blockTableParams.sort === "position"
+              ? String(right.position).padStart(8, "0")
+              : String(right[blockTableParams.sort]);
+      return leftValue.localeCompare(rightValue) * direction;
+    });
+  }, [activeTemplate?.blocks, blockTableParams]);
+
+  const pagedTemplateBlocks = React.useMemo(() => {
+    const start = (blockTableParams.page - 1) * blockTableParams.pageSize;
+    return filteredTemplateBlocks.slice(start, start + blockTableParams.pageSize);
+  }, [blockTableParams.page, blockTableParams.pageSize, filteredTemplateBlocks]);
 
   return (
     <section className="not-content space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-2 pb-3">
-        <div className="space-y-1">
+      <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
+        <div className="space-y-2">
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
           <p className="text-sm text-muted-foreground">{t.subtitle}</p>
         </div>
-        <Button type="button" onClick={startCreate}>
-          <Plus className="mr-2 size-4" />
-          {t.create}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={(templates.data?.data.length ?? 0) === 0}
+            onClick={exportAllTemplates}
+          >
+            <Download className="mr-2 size-4" />
+            {t.exportAllLabel}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={importMutation.isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="mr-2 size-4" />
+            {t.importLabel}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={onImportFile}
+          />
+          <Button type="button" onClick={startCreate}>
+            <Plus className="mr-2 size-4" />
+            {t.create}
+          </Button>
+        </div>
       </div>
+
+      {transferStatus ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {transferStatus}
+        </p>
+      ) : null}
 
       {templates.loading && !templates.data ? (
         <p className="text-sm text-muted-foreground">{t.loading}</p>
@@ -589,13 +802,48 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       <DataTable
         key="prompt-template-table-actions-v2"
         columns={templateColumns}
-        data={templates.data?.data ?? []}
-        searchColumn="name"
-        searchPlaceholder={t.searchTemplates}
-        filters={[publicFilter]}
-        emptyMessage={t.empty}
-        columnsLabel={t.columns}
-        selectedLabel={t.selected}
+        data={pagedTemplates}
+        loading={templates.loading}
+        rowCount={filteredTemplates.length}
+        page={templateTableParams.page}
+        pageSize={templateTableParams.pageSize}
+        onPageChange={(page) =>
+          setTemplateTableParams((current) => ({ ...current, page }))
+        }
+        onPageSizeChange={(pageSize) =>
+          setTemplateTableParams((current) => ({ ...current, page: 1, pageSize }))
+        }
+        sortBy={templateTableParams.sort}
+        sortDir={templateTableParams.order}
+        onSortChange={(sort, order) =>
+          setTemplateTableParams((current) => ({
+            ...current,
+            page: 1,
+            sort: (sort as TemplateSort | undefined) ?? DEFAULT_TEMPLATE_TABLE_PARAMS.sort,
+            order: order ?? DEFAULT_TEMPLATE_TABLE_PARAMS.order,
+          }))
+        }
+        q={templateTableParams.q}
+        onSearchChange={(q) =>
+          setTemplateTableParams((current) => ({ ...current, page: 1, q }))
+        }
+        f={templateTableParams.f}
+        onFilterChange={(f) =>
+          setTemplateTableParams((current) => ({ ...current, page: 1, f }))
+        }
+        filterOptions={publicFilterOptions}
+        labels={{
+          loading: t.loading,
+          empty: t.empty,
+          toolbar: {
+            search: t.searchTemplates,
+            reset: "Reset",
+            viewOptions: { view: t.columns, toggleColumns: t.columns },
+          },
+          pagination: {
+            selectedRows: t.selected,
+          },
+        }}
       />
 
       <Card>
@@ -611,7 +859,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
         <CardContent className="space-y-4">
           {activeTemplate ? (
             <>
-              <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center">
                 <Select value={blockToAdd} onValueChange={setBlockToAdd}>
                   <SelectTrigger className="md:max-w-sm">
                     <SelectValue placeholder={t.addBlock} />
@@ -659,13 +907,48 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               <DataTable
                 key={`prompt-template-blocks-actions-v2-${activeTemplate.id}`}
                 columns={blockColumns}
-                data={activeTemplate.blocks}
-                searchColumn="name"
-                searchPlaceholder={t.searchBlocks}
-                filters={blockFilters}
-                emptyMessage={t.blocks}
-                columnsLabel={t.columns}
-                selectedLabel={t.selected}
+                data={pagedTemplateBlocks}
+                loading={templates.loading}
+                rowCount={filteredTemplateBlocks.length}
+                page={blockTableParams.page}
+                pageSize={blockTableParams.pageSize}
+                onPageChange={(page) =>
+                  setBlockTableParams((current) => ({ ...current, page }))
+                }
+                onPageSizeChange={(pageSize) =>
+                  setBlockTableParams((current) => ({ ...current, page: 1, pageSize }))
+                }
+                sortBy={blockTableParams.sort}
+                sortDir={blockTableParams.order}
+                onSortChange={(sort, order) =>
+                  setBlockTableParams((current) => ({
+                    ...current,
+                    page: 1,
+                    sort: (sort as TemplateBlockSort | undefined) ?? DEFAULT_BLOCK_TABLE_PARAMS.sort,
+                    order: order ?? DEFAULT_BLOCK_TABLE_PARAMS.order,
+                  }))
+                }
+                q={blockTableParams.q}
+                onSearchChange={(q) =>
+                  setBlockTableParams((current) => ({ ...current, page: 1, q }))
+                }
+                f={blockTableParams.f}
+                onFilterChange={(f) =>
+                  setBlockTableParams((current) => ({ ...current, page: 1, f }))
+                }
+                filterOptions={blockFilterOptions}
+                labels={{
+                  loading: t.loading,
+                  empty: t.blocks,
+                  toolbar: {
+                    search: t.searchBlocks,
+                    reset: "Reset",
+                    viewOptions: { view: t.columns, toggleColumns: t.columns },
+                  },
+                  pagination: {
+                    selectedRows: t.selected,
+                  },
+                }}
               />
             </>
           ) : (
@@ -754,7 +1037,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               (activeTemplate?.blocks ?? [])
                 .filter((block) => block.is_dynamic)
                 .map((block) => (
-                  <div key={block.block_id} className="mb-3 space-y-2">
+                  <div key={block.block_id} className="mb-3 space-y-3">
                     <label className="block py-2 text-sm font-medium">
                       {t.dynamicFor}: {block.name}
                     </label>
@@ -781,8 +1064,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               </p>
             ) : null}
             {composeContent ? (
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 py-2">
                   <p className="text-sm font-medium">{t.composeResult}</p>
                   <div className="flex items-center gap-2">
                     <Button
@@ -812,9 +1095,11 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
                     ) : null}
                   </div>
                 </div>
-                <pre className="max-h-72 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted p-3 text-sm">
-                  {composeContent}
-                </pre>
+                <Textarea
+                  className="min-h-40 max-h-72 max-w-full resize-y overflow-auto"
+                  value={composeContent}
+                  onChange={(event) => setComposeContent(event.target.value)}
+                />
               </div>
             ) : null}
           </div>
