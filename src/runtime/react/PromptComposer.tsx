@@ -1,5 +1,4 @@
 import * as React from "react";
-import { usePromptBlocks } from "../hooks/usePromptBlocks.js";
 import { useComposePrompt } from "../hooks/useComposePrompt.js";
 import { usePromptTemplate } from "../hooks/usePromptTemplate.js";
 import { usePromptTemplateBlocks } from "../hooks/usePromptTemplate.js";

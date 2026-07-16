@@ -8,8 +8,7 @@ import {
   defaultIsSuperuser,
   getPromptAuthAdapter,
   resetPromptAuthAdapter,
-  setPromptAuthAdapter,
-  type PromptAuthAdapter
+  setPromptAuthAdapter
 } from "../src/runtime/authAdapter.js";
 import {
   ApiError,

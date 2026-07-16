@@ -141,26 +141,16 @@ export function PromptTemplateEditor({ labels }: PromptTemplateEditorProps) {
 
   const { compose, composeMutation } = useComposePrompt();
 
-  React.useEffect(() => {
-    void templates.refresh();
-    void blocks.refresh();
-  }, [templates.refresh, blocks.refresh]);
+  const { refresh: refreshTemplates } = templates;
+  const { refresh: refreshBlocks } = blocks;
 
-  const selectedTemplate =
-    templates.data?.data.find((tpl) => tpl.id === expandedId) ?? null;
+  React.useEffect(() => {
+    void refreshTemplates();
+    void refreshBlocks();
+  }, [refreshTemplates, refreshBlocks]);
 
   const startCreate = () => {
     setDraft({ ...EMPTY_DRAFT });
-  };
-
-  const startEdit = (template: { id: number; name: string; description: string | null; is_public: boolean }) => {
-    setDraft({
-      id: template.id,
-      name: template.name,
-      description: template.description ?? "",
-      is_public: template.is_public
-    });
-    setExpandedId(template.id);
   };
 
   const save = async () => {

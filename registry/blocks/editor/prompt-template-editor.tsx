@@ -252,7 +252,7 @@ export interface PromptTemplateEditorSkinProps {
 }
 
 export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEditorSkinProps) {
-  const t = { ...DEFAULT_LABELS, ...labels };
+  const t = React.useMemo(() => ({ ...DEFAULT_LABELS, ...labels }), [labels]);
   const templates = usePromptTemplates();
   const blocks = usePromptBlocks();
   const { compose, composeMutation } = useComposePrompt();
@@ -279,10 +279,13 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     defaultValues: emptyValues,
   });
 
+  const { refresh: refreshTemplates } = templates;
+  const { refresh: refreshBlocks } = blocks;
+
   React.useEffect(() => {
-    void templates.refresh();
-    void blocks.refresh();
-  }, [templates.refresh, blocks.refresh]);
+    void refreshTemplates();
+    void refreshBlocks();
+  }, [refreshTemplates, refreshBlocks]);
 
   const activeTemplate =
     templates.data?.data.find((template) => template.id === activeId) ??
@@ -306,7 +309,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     setOpen(true);
   };
 
-  const startEdit = (template: PromptTemplatePublic) => {
+  const startEdit = React.useCallback((template: PromptTemplatePublic) => {
     setEditing(template);
     form.reset({
       name: template.name,
@@ -314,7 +317,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       is_public: template.is_public,
     });
     setOpen(true);
-  };
+  }, [form]);
 
   const save = async (values: TemplateFormValues) => {
     const body = {
@@ -331,11 +334,11 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     setEditing(null);
   };
 
-  const exportTemplate = async (template: PromptTemplatePublic) => {
+  const exportTemplate = React.useCallback(async (template: PromptTemplatePublic) => {
     setTransferStatus(null);
     const payload = await exportTemplateMutation.mutateAsync(template.id);
     downloadPromptExport(payload, promptExportFilename("template", template.slug));
-  };
+  }, [exportTemplateMutation]);
 
   const exportAllTemplates = () => {
     const allTemplates = templates.data?.data ?? [];
@@ -493,7 +496,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
         cell: ({ row }) => row.original.description ?? "",
       },
     ],
-    [t],
+    [exportTemplate, startEdit, t],
   );
 
   const blockColumns = React.useMemo<ColumnDef<TemplateBlockPublic>[]>(

@@ -3,7 +3,6 @@ import { listParamsToOffset } from "../listParams.js";
 import { unwrap, unwrapOrNull } from "./blocks.js";
 import {
   ComposedPromptSchema,
-  PromptTemplatePublicSchema,
   PromptTemplatesPublicSchema,
   ResponseMessageSchema,
   ResponseModelBaseSchema,
