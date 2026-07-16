@@ -1,0 +1,2 @@
+# Keep tracked text files canonical across Windows and CI checkout environments.
+* text=auto eol=lf
