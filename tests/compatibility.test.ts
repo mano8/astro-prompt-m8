@@ -41,6 +41,7 @@ describe("prompt-engine-m8 compatibility", () => {
   it("checks the service version range", () => {
     expect(isPromptEngineM8ServiceVersionCompatible("1.0.0")).toBe(true);
     expect(isPromptEngineM8ServiceVersionCompatible("1.1.0")).toBe(true);
+    expect(isPromptEngineM8ServiceVersionCompatible("1.1.0-beta+build.1")).toBe(true);
     expect(isPromptEngineM8ServiceVersionCompatible("1.9.5")).toBe(true);
     expect(isPromptEngineM8ServiceVersionCompatible("0.0.1")).toBe(false);
     expect(isPromptEngineM8ServiceVersionCompatible("0.9.9")).toBe(false);

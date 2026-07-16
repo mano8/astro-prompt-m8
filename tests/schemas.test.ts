@@ -167,7 +167,8 @@ describe("portable import/export", () => {
   });
 
   it("defaults a missing block slug to null", () => {
-    const { slug: _slug, ...noSlug } = block();
+    const { slug, ...noSlug } = block();
+    expect(slug).toBeDefined();
     expect(s.toPortableBlock(noSlug as ReturnType<typeof block>).slug).toBeNull();
   });
 

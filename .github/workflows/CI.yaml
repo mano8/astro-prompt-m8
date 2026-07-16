@@ -12,6 +12,8 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
 
 jobs:
   quality:
@@ -32,6 +34,9 @@ jobs:
 
       - name: Type check
         run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
 
       - name: Build
         run: npm run build
@@ -69,6 +74,21 @@ jobs:
           name: coverage-node-${{ matrix.node-version }}
           path: coverage/
           if-no-files-found: ignore
+
+      - name: Upload coverage to Codecov
+        if: matrix.node-version == '22.14.0' && github.actor != 'dependabot[bot]' && env.CODECOV_TOKEN != ''
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: coverage/lcov.info
+          verbose: true
+
+      - name: Upload coverage to Codacy
+        if: matrix.node-version == '22.14.0' && github.actor != 'dependabot[bot]' && env.CODACY_PROJECT_TOKEN != ''
+        uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699 # v1
+        with:
+          project-token: ${{ env.CODACY_PROJECT_TOKEN }}
+          coverage-reports: coverage/lcov.info
 
   security:
     runs-on: ubuntu-latest

@@ -42,9 +42,24 @@ function contractObjectVersion(value: unknown): string | undefined {
 }
 
 function parseSemver(version: string): [number, number, number] | undefined {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version);
-  if (!match) return undefined;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  const separatorIndexes = [version.indexOf("-"), version.indexOf("+")]
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right);
+  const core = version.slice(0, separatorIndexes[0]);
+  const values = core.split(".");
+
+  if (
+    values.length !== 3 ||
+    values.some(
+      (value) =>
+        value.length === 0 ||
+        [...value].some((character) => character < "0" || character > "9")
+    )
+  ) {
+    return undefined;
+  }
+
+  return [Number(values[0]), Number(values[1]), Number(values[2])];
 }
 
 function compareSemver(left: string, right: string): number | undefined {
