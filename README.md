@@ -1,6 +1,8 @@
 # @mano8/astro-prompt-m8
 
 ![CI/CD](https://github.com/mano8/astro-prompt-m8/actions/workflows/CI.yaml/badge.svg?branch=main)
+[![codecov](https://codecov.io/github/mano8/astro-prompt-m8/graph/badge.svg?token=PR6R29PU91)](https://codecov.io/github/mano8/astro-prompt-m8)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/2e1f3da7b37846a49c0b205040cba498)](https://app.codacy.com/gh/mano8/astro-prompt-m8/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 
 Astro integration and headless client for [`prompt-engine-m8`]. The prompt-side
 analog of `@mano8/astro-media-m8`: typed Zod schemas, API wrappers for the full
