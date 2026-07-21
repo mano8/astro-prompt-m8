@@ -16,3 +16,4 @@ exclude_paths:
   - ".npm-cache/**"
   - "AGENTS.md"
   - "CLAUDE.md"
+  - "REPOSITORY_CONTEXT.md"
