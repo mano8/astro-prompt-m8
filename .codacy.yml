@@ -10,7 +10,6 @@ exclude_paths:
   - "coverage/**"
   - "registry/r/**"
   - "fixtures/**"
-  - "tests/**"
   - "node_modules/**"
   - ".npm/**"
   - ".npm-cache/**"

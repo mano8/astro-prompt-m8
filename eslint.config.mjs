@@ -1,8 +1,8 @@
 import js from "@eslint/js";
 import eslintReact from "@eslint-react/eslint-plugin";
+import tseslint from "@typescript-eslint/eslint-plugin";
 import globals from "globals";
 import pluginSecurity from "eslint-plugin-security";
-import tseslint from "typescript-eslint";
 
 export default [
   {
@@ -10,6 +10,9 @@ export default [
       "**/dist/**",
       "**/coverage/**",
       "**/.astro/**",
+      "**/.cache/**",
+      "**/.vite/**",
+      "**/node_modules/**",
       "**/pagefind/**",
       "registry/r/**",
       "fixtures/**",
@@ -18,7 +21,7 @@ export default [
     ],
   },
   js.configs.recommended,
-  ...tseslint.configs.recommended,
+  ...tseslint.configs["flat/recommended"],
   pluginSecurity.configs.recommended,
   {
     files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
