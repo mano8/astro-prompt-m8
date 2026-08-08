@@ -109,7 +109,7 @@
     "esbuild": "^0.28.1"
   },
   "promptEngineM8": {
-    "contract": "prompt-engine-m8@1.0",
+    "contract": "prompt-engine-m8@2.0.0",
     "testedServiceVersion": "1.1.0",
     "serviceVersionRange": ">=1.0.0 <2.0.0"
   },

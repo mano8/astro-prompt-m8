@@ -11,8 +11,8 @@ import {
 
 describe("prompt-engine-m8 compatibility", () => {
   it("exports the tested contract metadata", () => {
-    expect(PROMPT_ENGINE_M8_CONTRACT).toBe("prompt-engine-m8@1.0");
-    expect(PROMPT_ENGINE_M8_CONTRACT_VERSION).toBe("1.0");
+    expect(PROMPT_ENGINE_M8_CONTRACT).toBe("prompt-engine-m8@2.0.0");
+    expect(PROMPT_ENGINE_M8_CONTRACT_VERSION).toBe("2.0.0");
     expect(PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION).toBe("1.1.0");
     expect(PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE).toBe(">=1.0.0 <2.0.0");
   });
@@ -24,7 +24,7 @@ describe("prompt-engine-m8 compatibility", () => {
   });
 
   it("treats matching contract version or full id as compatible", () => {
-    expect(getPromptEngineM8Compatibility({ contract_version: "1.0" }).status).toBe("compatible");
+    expect(getPromptEngineM8Compatibility({ contract_version: "2.0.0" }).status).toBe("compatible");
     expect(
       getPromptEngineM8Compatibility({ prompt_engine_m8_contract: PROMPT_ENGINE_M8_CONTRACT })
         .status
@@ -60,11 +60,11 @@ describe("prompt-engine-m8 compatibility", () => {
 
   it("reads nested contract.version and version", () => {
     const compat = getPromptEngineM8Compatibility({
-      contract: { name: "prompt-engine-m8", version: "1.0" },
+      contract: { name: "prompt-engine-m8", version: "2.0.0" },
       version: "1.1.0"
     });
     expect(compat.status).toBe("compatible");
-    expect(compat.contractVersion).toBe("1.0");
+    expect(compat.contractVersion).toBe("2.0.0");
     expect(compat.serviceVersion).toBe("1.1.0");
     expect(getPromptEngineM8Compatibility({ version: "1.0.0", contract: { version: "0.0" } }).status).toBe(
       "incompatible"
@@ -73,7 +73,7 @@ describe("prompt-engine-m8 compatibility", () => {
 
   it("asserts compatible metadata and rejects otherwise", () => {
     expect(() =>
-      assertPromptEngineM8Compatibility({ contract_version: "1.0" }, false)
+      assertPromptEngineM8Compatibility({ contract_version: "2.0.0" }, false)
     ).not.toThrow();
     expect(() => assertPromptEngineM8Compatibility({})).toThrow();
     expect(() =>

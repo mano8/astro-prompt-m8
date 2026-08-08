@@ -24,7 +24,7 @@ and composes into the [mano8/fa-ui-m8](https://github.com/mano8/fa-ui-m8) host a
 - [`astro-auth-m8`](https://github.com/mano8/astro-auth-m8) — required auth peer; issues the fa-auth-m8 tokens this plugin's adapter consumes.
 - [`fa-ui-m8`](https://github.com/mano8/fa-ui-m8) — the Astro/Starlight host app this plugin installs into.
 
-Pinned to `prompt-engine-m8@1.0` (supported service-version range
+Pinned to `prompt-engine-m8@2.0.0` (supported service-version range
 `>=1.0.0 <2.0.0`; see `promptEngineM8` in `package.json`).
 
 ## Table of contents
@@ -44,7 +44,7 @@ Pinned to `prompt-engine-m8@1.0` (supported service-version range
 
 ## Backend contract
 
-This package targets the `prompt-engine-m8@1.0` API contract and was tested
+This package targets the `prompt-engine-m8@2.0.0` API contract and was tested
 against `prompt-engine-m8` service version `1.1.0`. Supported backend service
 versions are `>=1.0.0 <2.0.0`.
 
