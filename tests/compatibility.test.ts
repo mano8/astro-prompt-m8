@@ -103,6 +103,36 @@ describe("prompt-engine-m8 compatibility", () => {
     });
   });
 
+  it("rejects another service's /meta even when its contract version matches", () => {
+    // Every M8 service serves this payload shape from the shared auth-sdk-m8
+    // `mount_service_meta` helper, so a host pointed at the wrong sibling must be
+    // named as a wrong contract, not blessed because the version digits happen to
+    // line up. reparto-docente-m8 serves contract.version "2.0.0" — the exact
+    // digits this guard expects — so the version comparison alone admits it.
+    const wrongService = {
+      service: "M8FastApi",
+      version: "2.0.0",
+      api_version: "v1",
+      contract: {
+        name: "reparto-docente-m8",
+        version: "2.0.0",
+        range: ">=2.0.0 <3.0.0"
+      }
+    };
+    const result = getPromptEngineM8Compatibility(wrongService);
+
+    expect(result.status).toBe("incompatible");
+    expect(result.reason).toContain("reparto-docente-m8");
+    expect(result.reason).toContain(PROMPT_ENGINE_M8_CONTRACT);
+    expect(() => assertPromptEngineM8Compatibility(wrongService)).toThrow("reparto-docente-m8");
+  });
+
+  it("accepts a nested contract that names the expected issuer", () => {
+    expect(
+      getPromptEngineM8Compatibility({ contract: { name: "prompt-engine-m8", version: "2.0.0" } })
+    ).toMatchObject({ status: "compatible", contractVersion: "2.0.0" });
+  });
+
   it("asserts compatible metadata and rejects otherwise", () => {
     expect(() =>
       assertPromptEngineM8Compatibility({ contract_version: "2.0.0" }, false)
