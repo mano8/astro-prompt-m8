@@ -110,8 +110,8 @@
   },
   "promptEngineM8": {
     "contract": "prompt-engine-m8@2.0.0",
-    "testedServiceVersion": "1.1.0",
-    "serviceVersionRange": ">=1.0.0 <2.0.0"
+    "testedServiceVersion": "2.0.0",
+    "serviceVersionRange": ">=2.0.0 <3.0.0"
   },
   "allowScripts": {
     "esbuild@0.28.1": true,

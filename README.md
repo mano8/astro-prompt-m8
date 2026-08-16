@@ -25,7 +25,7 @@ and composes into the [mano8/fa-ui-m8](https://github.com/mano8/fa-ui-m8) host a
 - [`fa-ui-m8`](https://github.com/mano8/fa-ui-m8) — the Astro/Starlight host app this plugin installs into.
 
 Pinned to `prompt-engine-m8@2.0.0` (supported service-version range
-`>=1.0.0 <2.0.0`; see `promptEngineM8` in `package.json`).
+`>=2.0.0 <3.0.0`; see `promptEngineM8` in `package.json`).
 
 ## Table of contents
 
@@ -45,8 +45,8 @@ Pinned to `prompt-engine-m8@2.0.0` (supported service-version range
 ## Backend contract
 
 This package targets the `prompt-engine-m8@2.0.0` API contract and was tested
-against `prompt-engine-m8` service version `1.1.0`. Supported backend service
-versions are `>=1.0.0 <2.0.0`.
+against `prompt-engine-m8` service version `2.0.0`. Supported backend service
+versions are `>=2.0.0 <3.0.0`.
 
 Compatibility helpers are exported from `@mano8/astro-prompt-m8/compatibility`.
 Pass the backend `/meta` payload (or flat version fields) straight to the assert:
