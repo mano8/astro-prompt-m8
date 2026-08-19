@@ -8,7 +8,11 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Download, Plus, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { usePromptBlocks, usePromptTransfer } from "@mano8/astro-prompt-m8/hooks";
+import {
+  usePromptBlocks,
+  usePromptCompatibility,
+  usePromptTransfer,
+} from "@mano8/astro-prompt-m8/hooks";
 import {
   buildPromptExport,
   hasDynamicContentPlaceholder,
@@ -28,6 +32,11 @@ import {
   type DataTableSortDirection,
 } from "@/components/m8-ui/data-table";
 import { DataTableColumnHeader } from "@/components/m8-ui/data-table-column-header";
+import { StateError } from "@/components/m8-ui/state-error";
+import {
+  ToastNotificationHost,
+  toastNotification,
+} from "@/components/m8-ui/toast-notification";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -100,6 +109,15 @@ export interface PromptBlockEditorLabels {
   exportAllLabel: string;
   importLabel: string;
   importError: string;
+  saved: string;
+  saveFailed: string;
+  deleted: string;
+  deleteFailed: string;
+  exported: (count: number) => string;
+  exportFailed: string;
+  imported: (created: number, reused: number) => string;
+  incompatibleTitle: string;
+  incompatibleRetry: string;
 }
 
 const DEFAULT_LABELS: PromptBlockEditorLabels = {
@@ -136,6 +154,15 @@ const DEFAULT_LABELS: PromptBlockEditorLabels = {
   exportAllLabel: "Export page",
   importLabel: "Import",
   importError: "Could not import file.",
+  saved: "Prompt block saved.",
+  saveFailed: "Could not save the prompt block.",
+  deleted: "Prompt block deleted.",
+  deleteFailed: "Could not delete the prompt block.",
+  exported: (count) => `Exported ${count} block(s).`,
+  exportFailed: "Could not export.",
+  imported: (created, reused) => `Imported ${created} new, ${reused} reused.`,
+  incompatibleTitle: "Prompt service unavailable",
+  incompatibleRetry: "Reload",
 };
 
 const blockTypes = ["role", "task", "context", "instruction", "example", "format"] as const;
@@ -219,10 +246,12 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
   const { data, loading, error, createMutation, updateMutation, deleteMutation, refresh } =
     usePromptBlocks(tableParams);
   const { exportBlockMutation, importMutation } = usePromptTransfer();
+  // `H5`: the session `GET /meta` preflight. A host pointed at the wrong M8
+  // service gets the shared error state, not four failing requests.
+  const compatibility = usePromptCompatibility();
   const [editing, setEditing] = React.useState<PromptBlockPublic | null>(null);
   const [open, setOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PromptBlockPublic | null>(null);
-  const [transferStatus, setTransferStatus] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const form = useForm<BlockFormValues>({
@@ -254,49 +283,60 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     setOpen(true);
   }, [form]);
 
+  // Every mutation reports through the shared toast contract (`H7`) — the same
+  // one auth and reparto use — so feedback reads the same across the fleet
+  // instead of one surface printing a paragraph and another saying nothing.
   const save = async (values: BlockFormValues) => {
     const body = {
       ...values,
       description: values.description?.trim() ? values.description.trim() : null,
     };
-    if (editing) {
-      await updateMutation.mutateAsync({ blockId: editing.id, body });
-    } else {
-      await createMutation.mutateAsync(body);
+    try {
+      if (editing) {
+        await updateMutation.mutateAsync({ blockId: editing.id, body });
+      } else {
+        await createMutation.mutateAsync(body);
+      }
+    } catch {
+      toastNotification.error({ title: t.saveFailed });
+      return;
     }
+    toastNotification.success({ title: t.saved });
     setOpen(false);
     setEditing(null);
   };
 
   const exportBlock = React.useCallback(async (block: PromptBlockPublic) => {
-    setTransferStatus(null);
-    const payload = await exportBlockMutation.mutateAsync(block.id);
-    downloadPromptExport(payload, promptExportFilename("block", block.slug));
-  }, [exportBlockMutation]);
+    try {
+      const payload = await exportBlockMutation.mutateAsync(block.id);
+      downloadPromptExport(payload, promptExportFilename("block", block.slug));
+      toastNotification.success({ title: t.exported(1) });
+    } catch {
+      toastNotification.error({ title: t.exportFailed });
+    }
+  }, [exportBlockMutation, t]);
 
   /** Bundle the rows currently displayed — the filtered page the service returned. */
   const exportPageBlocks = () => {
     const pageBlocks = data?.data ?? [];
     if (pageBlocks.length === 0) return;
-    setTransferStatus(null);
     const payload = buildPromptExport({ blocks: pageBlocks.map(toPortableBlock) });
     downloadPromptExport(payload, promptExportFilename("bundle"));
-    setTransferStatus(`Exported ${pageBlocks.length} block(s).`);
+    toastNotification.success({ title: t.exported(pageBlocks.length) });
   };
 
   const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    setTransferStatus(null);
     try {
       const parsed = await readPromptExportFile(file);
       const result = await importMutation.mutateAsync(parsed);
-      setTransferStatus(
-        `Imported ${result.blocks.created.length} new, ${result.blocks.reused.length} reused.`,
-      );
+      toastNotification.success({
+        title: t.imported(result.blocks.created.length, result.blocks.reused.length),
+      });
     } catch {
-      setTransferStatus(t.importError);
+      toastNotification.error({ title: t.importError });
     }
   };
 
@@ -440,8 +480,24 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     options: promptBlockFacets.map((facet) => ({ label: facetLabels[facet], value: facet })),
   };
 
+  // An incompatible service surfaces the shared error state rather than a wall
+  // of failed requests: nothing below this point can work against it.
+  if (compatibility.incompatible) {
+    return (
+      <section className="not-content space-y-6">
+        <StateError
+          title={t.incompatibleTitle}
+          description={compatibility.reason ?? t.error}
+          retryLabel={t.incompatibleRetry}
+          onRetry={() => window.location.reload()}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="not-content space-y-6">
+      <ToastNotificationHost />
       <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
         <div className="space-y-2">
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
@@ -480,13 +536,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
         </div>
       </div>
 
-      {transferStatus ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          {transferStatus}
-        </p>
-      ) : null}
-
-      {loading && !data ? <p className="text-sm text-muted-foreground">{t.loading}</p> : null}
+      {loading && !data ?  <p className="text-sm text-muted-foreground">{t.loading}</p> : null}
       {error && !data ? (
         <p role="alert" className="text-sm text-destructive">
           {t.error}
@@ -686,7 +736,11 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
               disabled={deleteMutation.isPending}
               onClick={() => {
                 if (!deleting) return;
-                void deleteMutation.mutateAsync(deleting.id).finally(() => setDeleting(null));
+                void deleteMutation
+                  .mutateAsync(deleting.id)
+                  .then(() => toastNotification.success({ title: t.deleted }))
+                  .catch(() => toastNotification.error({ title: t.deleteFailed }))
+                  .finally(() => setDeleting(null));
               }}
             >
               {t.deleteLabel}

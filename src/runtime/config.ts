@@ -5,7 +5,15 @@ export type PromptRuntimeConfig = {
   apiPrefix: string;
   /** Header sent on every request so a same-origin stack can pin CSRF. */
   csrfHeader: string;
-  /** Role string that grants admin access through the auth adapter. */
+  /**
+   * Minimum role that grants admin access through the auth adapter.
+   *
+   * Defaults to `admin`, matching the floor prompt-engine-m8 enforces on
+   * `/dashboard/*` (`require_admin`). Any of the ordered M8 roles is read as a
+   * floor — `superadmin` also passes an `admin` gate — while any other string
+   * keeps the older exact-match behaviour, so a host on a custom role vocabulary
+   * (including the previous `is_superuser` default) is unaffected.
+   */
   adminRole: string;
   /** Compose / list hard timeout for client-side fetches, in milliseconds. */
   requestTimeoutMs: number;
@@ -15,7 +23,7 @@ const DEFAULT_CONFIG: PromptRuntimeConfig = {
   apiBase: "/prompt",
   apiPrefix: "/fastapi",
   csrfHeader: "X-Requested-With",
-  adminRole: "is_superuser",
+  adminRole: "admin",
   requestTimeoutMs: 30_000
 };
 

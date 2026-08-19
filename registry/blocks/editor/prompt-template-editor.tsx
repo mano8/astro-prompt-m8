@@ -10,6 +10,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
   usePromptBlocks,
+  usePromptCompatibility,
   usePromptTemplates,
   useComposePrompt,
   usePromptTransfer,
@@ -33,6 +34,11 @@ import {
   type DataTableSortDirection,
 } from "@/components/m8-ui/data-table";
 import { DataTableColumnHeader } from "@/components/m8-ui/data-table-column-header";
+import { StateError } from "@/components/m8-ui/state-error";
+import {
+  ToastNotificationHost,
+  toastNotification,
+} from "@/components/m8-ui/toast-notification";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,6 +125,19 @@ export interface PromptTemplateEditorLabels {
   exportAllLabel: string;
   importLabel: string;
   importError: string;
+  saved: string;
+  saveFailed: string;
+  deleted: string;
+  deleteFailed: string;
+  blockAttached: string;
+  blockDetached: string;
+  blockMoved: string;
+  blockActionFailed: string;
+  exported: (count: number) => string;
+  exportFailed: string;
+  imported: (created: number, skipped: number) => string;
+  incompatibleTitle: string;
+  incompatibleRetry: string;
 }
 
 const DEFAULT_LABELS: PromptTemplateEditorLabels = {
@@ -167,6 +186,20 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   exportAllLabel: "Export page",
   importLabel: "Import",
   importError: "Could not import file.",
+  saved: "Prompt template saved.",
+  saveFailed: "Could not save the prompt template.",
+  deleted: "Prompt template deleted.",
+  deleteFailed: "Could not delete the prompt template.",
+  blockAttached: "Block attached.",
+  blockDetached: "Block removed.",
+  blockMoved: "Block position updated.",
+  blockActionFailed: "Could not update the template blocks.",
+  exported: (count) => `Exported ${count} template(s).`,
+  exportFailed: "Could not export.",
+  imported: (created, skipped) =>
+    `Imported ${created} template(s), ${skipped} skipped (already exist).`,
+  incompatibleTitle: "Prompt service unavailable",
+  incompatibleRetry: "Reload",
 };
 
 const templateFormSchema = z.object({
@@ -283,7 +316,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
   const blocks = usePromptBlocks();
   const { compose, composeMutation } = useComposePrompt();
   const { exportTemplateMutation, importMutation } = usePromptTransfer();
-  const [transferStatus, setTransferStatus] = React.useState<string | null>(null);
+  // `H5`: the session `GET /meta` preflight, shared with the block editor —
+  // the runner is memoised, so mounting both reads `/meta` once.
+  const compatibility = usePromptCompatibility();
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [editing, setEditing] = React.useState<PromptTemplatePublic | null>(null);
   const [open, setOpen] = React.useState(false);
@@ -343,50 +378,68 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     setOpen(true);
   }, [form]);
 
+  // Every mutation reports through the shared toast contract (`H7`), the same
+  // one auth and reparto use, so feedback reads the same across the fleet.
+  const blockActionFeedback = React.useMemo(
+    () => (title: string) => ({
+      onSuccess: () => toastNotification.success({ title }),
+      onError: () => toastNotification.error({ title: t.blockActionFailed }),
+    }),
+    [t],
+  );
+
   const save = async (values: TemplateFormValues) => {
     const body = {
       ...values,
       description: values.description?.trim() ? values.description.trim() : null,
     };
-    if (editing) {
-      await templates.updateMutation.mutateAsync({ templateId: editing.id, body });
-    } else {
-      const created = await templates.createMutation.mutateAsync(body);
-      setActiveId(created.id);
+    try {
+      if (editing) {
+        await templates.updateMutation.mutateAsync({ templateId: editing.id, body });
+      } else {
+        const created = await templates.createMutation.mutateAsync(body);
+        setActiveId(created.id);
+      }
+    } catch {
+      toastNotification.error({ title: t.saveFailed });
+      return;
     }
+    toastNotification.success({ title: t.saved });
     setOpen(false);
     setEditing(null);
   };
 
   const exportTemplate = React.useCallback(async (template: PromptTemplatePublic) => {
-    setTransferStatus(null);
-    const payload = await exportTemplateMutation.mutateAsync(template.id);
-    downloadPromptExport(payload, promptExportFilename("template", template.slug));
-  }, [exportTemplateMutation]);
+    try {
+      const payload = await exportTemplateMutation.mutateAsync(template.id);
+      downloadPromptExport(payload, promptExportFilename("template", template.slug));
+      toastNotification.success({ title: t.exported(1) });
+    } catch {
+      toastNotification.error({ title: t.exportFailed });
+    }
+  }, [exportTemplateMutation, t]);
 
   /** Bundle the rows currently displayed — the filtered page the service returned. */
   const exportPageTemplates = () => {
     const pageTemplates = templates.data?.data ?? [];
     if (pageTemplates.length === 0) return;
-    setTransferStatus(null);
     const payload = buildPromptExport({ templates: pageTemplates.map(toPortableTemplate) });
     downloadPromptExport(payload, promptExportFilename("bundle"));
-    setTransferStatus(`Exported ${pageTemplates.length} template(s).`);
+    toastNotification.success({ title: t.exported(pageTemplates.length) });
   };
 
   const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    setTransferStatus(null);
     try {
       const parsed = await readPromptExportFile(file);
       const result = await importMutation.mutateAsync(parsed);
-      setTransferStatus(
-        `Imported ${result.templates.created.length} template(s), ${result.templates.skipped.length} skipped (already exist).`,
-      );
+      toastNotification.success({
+        title: t.imported(result.templates.created.length, result.templates.skipped.length),
+      });
     } catch {
-      setTransferStatus(t.importError);
+      toastNotification.error({ title: t.importError });
     }
   };
 
@@ -569,11 +622,14 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               disabled={!activeTemplate || row.index === 0 || templates.setPositionMutation.isPending}
               onClick={() => {
                 if (!activeTemplate) return;
-                templates.setPositionMutation.mutate({
-                  templateId: activeTemplate.id,
-                  blockId: row.original.block_id,
-                  position: row.original.position - 1,
-                });
+                templates.setPositionMutation.mutate(
+                  {
+                    templateId: activeTemplate.id,
+                    blockId: row.original.block_id,
+                    position: row.original.position - 1,
+                  },
+                  blockActionFeedback(t.blockMoved),
+                );
               }}
             >
               <ArrowUp className="size-4" />
@@ -591,11 +647,14 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               }
               onClick={() => {
                 if (!activeTemplate) return;
-                templates.setPositionMutation.mutate({
-                  templateId: activeTemplate.id,
-                  blockId: row.original.block_id,
-                  position: row.original.position + 1,
-                });
+                templates.setPositionMutation.mutate(
+                  {
+                    templateId: activeTemplate.id,
+                    blockId: row.original.block_id,
+                    position: row.original.position + 1,
+                  },
+                  blockActionFeedback(t.blockMoved),
+                );
               }}
             >
               <ArrowDown className="size-4" />
@@ -609,10 +668,13 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
               disabled={!activeTemplate || templates.removeBlockMutation.isPending}
               onClick={() => {
                 if (!activeTemplate) return;
-                templates.removeBlockMutation.mutate({
-                  templateId: activeTemplate.id,
-                  blockId: row.original.block_id,
-                });
+                templates.removeBlockMutation.mutate(
+                  {
+                    templateId: activeTemplate.id,
+                    blockId: row.original.block_id,
+                  },
+                  blockActionFeedback(t.blockDetached),
+                );
               }}
             >
               {t.removeBlock}
@@ -664,7 +726,13 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
         ),
       },
     ],
-    [activeTemplate, t, templates.removeBlockMutation, templates.setPositionMutation],
+    [
+      activeTemplate,
+      blockActionFeedback,
+      t,
+      templates.removeBlockMutation,
+      templates.setPositionMutation,
+    ],
   );
 
   // Declared `f` vocabulary for `GET /prompt-template/`, not a local guess.
@@ -737,8 +805,24 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     return filteredTemplateBlocks.slice(start, start + blockTableParams.pageSize);
   }, [blockTableParams.page, blockTableParams.pageSize, filteredTemplateBlocks]);
 
+  // An incompatible service surfaces the shared error state rather than a wall
+  // of failed requests: nothing below this point can work against it.
+  if (compatibility.incompatible) {
+    return (
+      <section className="not-content space-y-6">
+        <StateError
+          title={t.incompatibleTitle}
+          description={compatibility.reason ?? t.error}
+          retryLabel={t.incompatibleRetry}
+          onRetry={() => window.location.reload()}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="not-content space-y-6">
+      <ToastNotificationHost />
       <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
         <div className="space-y-2">
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
@@ -776,12 +860,6 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
           </Button>
         </div>
       </div>
-
-      {transferStatus ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          {transferStatus}
-        </p>
-      ) : null}
 
       {templates.loading && !templates.data ? (
         <p className="text-sm text-muted-foreground">{t.loading}</p>
@@ -870,11 +948,14 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
                   variant="outline"
                   disabled={!blockToAdd || templates.addBlockMutation.isPending}
                   onClick={() => {
-                    templates.addBlockMutation.mutate({
-                      templateId: activeTemplate.id,
-                      blockId: Number(blockToAdd),
-                      position: activeTemplate.blocks.length,
-                    });
+                    templates.addBlockMutation.mutate(
+                      {
+                        templateId: activeTemplate.id,
+                        blockId: Number(blockToAdd),
+                        position: activeTemplate.blocks.length,
+                      },
+                      blockActionFeedback(t.blockAttached),
+                    );
                     setBlockToAdd("");
                   }}
                 >
@@ -1123,6 +1204,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
                 if (!deleting) return;
                 void templates.deleteMutation
                   .mutateAsync(deleting.id)
+                  .then(() => toastNotification.success({ title: t.deleted }))
+                  .catch(() => toastNotification.error({ title: t.deleteFailed }))
                   .finally(() => {
                     setDeleting(null);
                     if (activeId === deleting.id) setActiveId(null);

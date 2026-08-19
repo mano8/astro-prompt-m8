@@ -6,8 +6,9 @@
 // into the consumer via the @mano8-prompt registry — edit freely per app.
 import * as React from "react";
 import { Boxes, FileText, FolderTree, Users } from "lucide-react";
-import { usePromptAdmin } from "@mano8/astro-prompt-m8/hooks";
+import { usePromptAdmin, usePromptCompatibility } from "@mano8/astro-prompt-m8/hooks";
 
+import { StateError } from "@/components/m8-ui/state-error";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -23,6 +24,8 @@ export interface PromptDashboardOverviewLabels {
   activityEmpty: string;
   noCategories: string;
   error: string;
+  incompatibleTitle: string;
+  incompatibleRetry: string;
 }
 
 const DEFAULT_LABELS: PromptDashboardOverviewLabels = {
@@ -36,7 +39,9 @@ const DEFAULT_LABELS: PromptDashboardOverviewLabels = {
   activityModel: "Model",
   activityEmpty: "No recent activity.",
   noCategories: "No categories yet.",
-  error: "Could not load admin data."
+  error: "Could not load admin data.",
+  incompatibleTitle: "Prompt service unavailable",
+  incompatibleRetry: "Reload"
 };
 
 export interface PromptDashboardOverviewProps {
@@ -68,6 +73,9 @@ function StatCard({
 export function PromptDashboardOverview({ labels }: PromptDashboardOverviewProps) {
   const t = { ...DEFAULT_LABELS, ...labels };
   const { overview, error, load } = usePromptAdmin();
+  // `H5`: the session `GET /meta` preflight. A host pointed at a sibling M8
+  // service is named as such here rather than showing four empty stat cards.
+  const compatibility = usePromptCompatibility();
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
@@ -81,6 +89,19 @@ export function PromptDashboardOverview({ labels }: PromptDashboardOverviewProps
       cancelled = true;
     };
   }, [load]);
+
+  if (compatibility.incompatible) {
+    return (
+      <div className="not-content space-y-4">
+        <StateError
+          title={t.incompatibleTitle}
+          description={compatibility.reason ?? t.error}
+          retryLabel={t.incompatibleRetry}
+          onRetry={() => window.location.reload()}
+        />
+      </div>
+    );
+  }
 
   if (!ready) {
     return (

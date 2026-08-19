@@ -4,6 +4,7 @@ import * as categoriesApi from "./categories.js";
 import * as dashboardApi from "./dashboard.js";
 import * as adminApi from "./admin.js";
 import * as transferApi from "./transfer.js";
+import * as metaApi from "./meta.js";
 
 // Flat named exports (tree-shakeable direct imports).
 export * from "./blocks.js";
@@ -12,6 +13,7 @@ export * from "./categories.js";
 export * from "./dashboard.js";
 export * from "./admin.js";
 export * from "./transfer.js";
+export * from "./meta.js";
 
 // Grouped namespaces (`blocks.list`, `templates.compose`, ...).
 export const blocks = {
@@ -58,4 +60,10 @@ export const transfer = {
   exportBlock: transferApi.exportBlockById,
   exportTemplate: transferApi.exportTemplateById,
   import: transferApi.importPromptExport
+} as const;
+
+export const meta = {
+  get: metaApi.getServiceMeta,
+  preflight: metaApi.runPromptEngineM8Preflight,
+  resetPreflight: metaApi.resetPromptEngineM8Preflight
 } as const;

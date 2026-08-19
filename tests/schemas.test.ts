@@ -140,6 +140,45 @@ describe("category & response schemas", () => {
     expect(s.CategoriesPublicSchema.parse({ data: [category()], count: 1 }).count).toBe(1);
   });
 
+  it("requires `type` on a category create, as the service does (H2)", () => {
+    expect(s.CategoryCreateSchema.parse({ name: "x", type: "prompt_block" })).toEqual({
+      name: "x",
+      type: "prompt_block"
+    });
+    expect(s.CategoryCreateSchema.parse({ name: "x", type: "prompt_template" }).type).toBe(
+      "prompt_template"
+    );
+    // The gap `H2` names: this parsed locally and 422'd on the wire.
+    expect(() => s.CategoryCreateSchema.parse({ name: "x" })).toThrow();
+    expect(() => s.CategoryCreateSchema.parse({ name: "x", type: "other" })).toThrow();
+    // The service derives `slug` from `name` and overwrites whatever arrives,
+    // so offering the field would publish a knob that does nothing.
+    expect(() =>
+      s.CategoryCreateSchema.parse({ name: "x", type: "prompt_block", slug: "x" })
+    ).toThrow();
+    // Update reuses the create shape, exactly as `CategoryUpdate` does.
+    expect(() => s.CategoryUpdateSchema.parse({ name: "x" })).toThrow();
+  });
+
+  it("reads the shared /meta payload leniently but pins what it uses", () => {
+    const meta = {
+      service: "prompt-engine-m8",
+      version: "2.0.0",
+      api_version: "v1",
+      contract: { name: "prompt-engine-m8", version: "2.0.0", range: ">=2.0.0 <3.0.0" }
+    };
+    expect(s.ServiceMetaSchema.parse(meta)).toMatchObject(meta);
+    // A field added to the shared schema must not break the preflight.
+    expect(s.ServiceMetaSchema.parse({ ...meta, build: "abc" })).toMatchObject({ build: "abc" });
+    expect(
+      s.ServiceContractSchema.parse({ ...meta.contract, deprecated: [] }).name
+    ).toBe("prompt-engine-m8");
+    // What the preflight reads is still required.
+    expect(() => s.ServiceMetaSchema.parse({ ...meta, version: "" })).toThrow();
+    expect(() => s.ServiceMetaSchema.parse({ ...meta, contract: {} })).toThrow();
+    expect(() => s.ServiceMetaSchema.parse({ service: meta.service })).toThrow();
+  });
+
   it("response model/message envelopes", () => {
     expect(s.ResponseMessageSchema.parse({ success: true, msg: "ok" }).success).toBe(true);
     expect(() => s.ResponseMessageSchema.parse({ success: "x" })).toThrow();

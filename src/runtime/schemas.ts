@@ -44,6 +44,31 @@ export const ResponseModelOrMessageSchema = z.union([
 export type ResponseModelOrMessage = z.infer<typeof ResponseModelOrMessageSchema>;
 
 // ---------------------------------------------------------------------------
+// Service metadata — mirrors auth_sdk_m8.schemas.meta.ServiceMeta, which every
+// M8 service serves unauthenticated at `{API_PREFIX}/meta`.
+//
+// Deliberately loose rather than `.strict()`: `/meta` is read before anything
+// else on the session, so a field added to the shared schema must not turn the
+// compatibility preflight into the outage it exists to prevent. The fields the
+// preflight actually reads are pinned; the rest is passed through untouched.
+// ---------------------------------------------------------------------------
+
+export const ServiceContractSchema = z.looseObject({
+  name: z.string().min(1),
+  version: z.string().min(1),
+  range: z.string().min(1)
+});
+export type ServiceContract = z.infer<typeof ServiceContractSchema>;
+
+export const ServiceMetaSchema = z.looseObject({
+  service: z.string().min(1),
+  version: z.string().min(1),
+  api_version: z.string().min(1),
+  contract: ServiceContractSchema
+});
+export type ServiceMeta = z.infer<typeof ServiceMetaSchema>;
+
+// ---------------------------------------------------------------------------
 // Prompt blocks
 // ---------------------------------------------------------------------------
 
@@ -200,13 +225,29 @@ export const CategoriesPublicSchema = z
   .strict();
 export type CategoriesPublic = z.infer<typeof CategoriesPublicSchema>;
 
+/**
+ * Create payload for `POST /category/add/`.
+ *
+ * `type` is **required**, mirroring the service's `CategoryCreate`. It was
+ * absent here while the service demanded it (`H2`), so every create this schema
+ * produced was a 422 the client could not see: the payload parsed locally and
+ * failed on the wire. `D-C1` put the fix on this side deliberately — the caller
+ * knows whether it is filing a block or a template category, and a server-chosen
+ * default would be a guess wearing a contract's clothes.
+ *
+ * `slug` is *not* accepted. The service derives it from `name` in a `before`
+ * validator and overwrites whatever a caller sends, so offering the field here
+ * would publish a knob that does nothing.
+ */
 export const CategoryCreateSchema = z
   .object({
-    name: z.string().min(1).max(50)
+    name: z.string().min(1).max(50),
+    type: CategoryTypeSchema
   })
   .strict();
 export type CategoryCreate = z.infer<typeof CategoryCreateSchema>;
 
+/** `PUT /category/edit/{id}/` takes the same shape — the service reuses it. */
 export const CategoryUpdateSchema = CategoryCreateSchema;
 export type CategoryUpdate = z.infer<typeof CategoryUpdateSchema>;
 

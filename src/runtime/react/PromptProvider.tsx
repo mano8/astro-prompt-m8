@@ -8,12 +8,23 @@ import {
 } from "react";
 import { configurePrompt, type PromptRuntimeConfig } from "../config.js";
 import { getPromptAuthAdapter, type PromptAuthAdapter } from "../authAdapter.js";
+import {
+  runPromptEngineM8Preflight,
+  type PromptEngineM8Preflight
+} from "../api/meta.js";
 
 export type PromptContextValue = {
   adapter: PromptAuthAdapter;
   user: unknown;
   isSuperuser: boolean;
   loading: boolean;
+  /**
+   * Result of the once-per-session `GET /meta` compatibility preflight, or
+   * `null` while it is still in flight. Consume it through
+   * `usePromptCompatibility`; the shipped skins render the shared `state-error`
+   * block when `status` is `"incompatible"`.
+   */
+  compatibility: PromptEngineM8Preflight | null;
 };
 
 const PromptContext = createContext<PromptContextValue | null>(null);
@@ -51,6 +62,21 @@ export function PromptProvider({
 
   const resolved = adapter ?? getPromptAuthAdapter();
   const [authState, setAuthState] = useState(() => readAdapterUser(resolved));
+  const [compatibility, setCompatibility] = useState<PromptEngineM8Preflight | null>(null);
+
+  // `H5`: the compatibility guard's live call site. The runner is memoised on
+  // its module, so mounting four views does not read `/meta` four times, and it
+  // resolves rather than rejects — an unreachable service must not take the
+  // provider down before the views have a chance to say so.
+  useEffect(() => {
+    let cancelled = false;
+    void runPromptEngineM8Preflight().then((result) => {
+      if (!cancelled) setCompatibility(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!resolved.getUser) {
@@ -92,9 +118,10 @@ export function PromptProvider({
       adapter: resolved,
       user,
       isSuperuser: Boolean(resolved.isSuperuser?.(user)),
-      loading
+      loading,
+      compatibility
     }),
-    [loading, resolved, user]
+    [compatibility, loading, resolved, user]
   );
 
   return <PromptContext.Provider value={value}>{children}</PromptContext.Provider>;

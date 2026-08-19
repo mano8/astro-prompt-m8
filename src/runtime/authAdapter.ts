@@ -23,9 +23,41 @@ export type InMemoryAuthAdapter = PromptAuthAdapter & {
 };
 
 /**
- * Best-effort superuser detection that does not depend on a specific user
- * shape: honours an explicit `is_superuser` flag, the configured admin role,
- * or a `roles` array containing it.
+ * The M8 role vocabulary, highest privilege first — a mirror of
+ * `auth_sdk_m8.schemas.base.RoleType.get_ordered_roles()`, by value rather than
+ * by import, since the prompt plugin never depends on a service package.
+ */
+export const PROMPT_ROLE_ORDER = [
+  "superadmin",
+  "admin",
+  "writer",
+  "reader",
+  "user"
+] as const;
+export type PromptRole = (typeof PROMPT_ROLE_ORDER)[number];
+
+function isPromptRole(value: string): value is PromptRole {
+  return (PROMPT_ROLE_ORDER as readonly string[]).includes(value);
+}
+
+/** True when `role` sits at or above `floor` in the ordered vocabulary. */
+export function hasMinimumPromptRole(role: string, floor: string): boolean {
+  if (!isPromptRole(role) || !isPromptRole(floor)) return false;
+  return PROMPT_ROLE_ORDER.indexOf(role) <= PROMPT_ROLE_ORDER.indexOf(floor);
+}
+
+/**
+ * Best-effort admin detection that does not depend on a specific user shape:
+ * honours an explicit `is_superuser` flag, a `role` at or above the configured
+ * floor, or a `roles` array carrying one.
+ *
+ * `D-C2` set that floor to `admin`, matching the `require_admin` the service now
+ * enforces on `/dashboard/*`. Before this, the client admitted superusers only —
+ * fail-closed, so never a hole, but it locked an ADMIN-tier user out of a
+ * dashboard the service would have served them.
+ *
+ * A `adminRole` outside the ordered vocabulary is compared by equality exactly
+ * as before, so a host on its own role strings keeps the behaviour it had.
  */
 export function defaultIsSuperuser(
   user: unknown,
@@ -34,10 +66,17 @@ export function defaultIsSuperuser(
   if (!user || typeof user !== "object") return false;
   const record = user as Record<string, unknown>;
   if (record.is_superuser === true) return true;
-  if (adminRole !== "is_superuser" && typeof record.role === "string" && record.role === adminRole) {
+
+  const matches = (value: string) =>
+    isPromptRole(adminRole) ? hasMinimumPromptRole(value, adminRole) : value === adminRole;
+
+  if (adminRole !== "is_superuser" && typeof record.role === "string" && matches(record.role)) {
     return true;
   }
-  return Array.isArray(record.roles) && record.roles.includes(adminRole);
+  return (
+    Array.isArray(record.roles) &&
+    record.roles.some((value) => typeof value === "string" && matches(value))
+  );
 }
 
 /** A self-contained adapter that holds the token in memory only. */

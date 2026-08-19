@@ -8,7 +8,12 @@ const listBlocksMock = vi.hoisted(() => vi.fn());
 const composeTemplateMock = vi.hoisted(() => vi.fn());
 const getAdminOverviewMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../src/runtime/api/blocks.js", () => ({
+// The provider's `/meta` preflight reaches `client.js`, which re-exports the
+// whole api barrel — so a hand-listed mock of this module has to satisfy every
+// barrel consumer, not just the hooks under test. Spread the real module and
+// override only the calls this file asserts on.
+vi.mock("../src/runtime/api/blocks.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/runtime/api/blocks.js")>()),
   listBlocks: listBlocksMock,
   createBlock: vi.fn(),
   updateBlock: vi.fn(),

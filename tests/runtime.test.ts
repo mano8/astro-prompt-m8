@@ -6,6 +6,8 @@ import {
   createFaAuthAdapter,
   createInMemoryAuthAdapter,
   defaultIsSuperuser,
+  hasMinimumPromptRole,
+  PROMPT_ROLE_ORDER,
   getPromptAuthAdapter,
   resetPromptAuthAdapter,
   setPromptAuthAdapter
@@ -100,6 +102,40 @@ describe("auth adapter", () => {
     expect(defaultIsSuperuser({ roles: ["admin"] }, "admin")).toBe(true);
     expect(defaultIsSuperuser({ role: "user" }, "admin")).toBe(false);
     expect(defaultIsSuperuser({ is_superuser: false })).toBe(false);
+  });
+
+  it("reads adminRole as a floor in the ordered M8 role vocabulary (D-C2)", () => {
+    // The service moved `/dashboard/*` to `require_admin`; the client used to
+    // admit superusers only, locking an ADMIN-tier user out of a dashboard the
+    // service would have served them.
+    expect(getPromptConfig().adminRole).toBe("admin");
+    expect(defaultIsSuperuser({ role: "superadmin" })).toBe(true);
+    expect(defaultIsSuperuser({ role: "admin" })).toBe(true);
+    expect(defaultIsSuperuser({ role: "writer" })).toBe(false);
+    expect(defaultIsSuperuser({ role: "reader" })).toBe(false);
+    expect(defaultIsSuperuser({ roles: ["reader", "admin"] })).toBe(true);
+    expect(defaultIsSuperuser({ roles: ["writer"] })).toBe(false);
+    // A non-string entry in `roles` is skipped, not coerced.
+    expect(defaultIsSuperuser({ roles: [1, null] })).toBe(false);
+    expect(defaultIsSuperuser({ role: "writer" }, "writer")).toBe(true);
+  });
+
+  it("keeps exact-match behaviour for a role vocabulary it does not own", () => {
+    // A host on its own strings — including the pre-D-C2 `is_superuser`
+    // default — must not start matching by hierarchy.
+    expect(defaultIsSuperuser({ role: "is_superuser" }, "is_superuser")).toBe(false);
+    expect(defaultIsSuperuser({ roles: ["is_superuser"] }, "is_superuser")).toBe(true);
+    expect(defaultIsSuperuser({ role: "ops-lead" }, "ops-lead")).toBe(true);
+    expect(defaultIsSuperuser({ role: "superadmin" }, "ops-lead")).toBe(false);
+  });
+
+  it("orders roles the way auth-sdk-m8 does", () => {
+    expect([...PROMPT_ROLE_ORDER]).toEqual(["superadmin", "admin", "writer", "reader", "user"]);
+    expect(hasMinimumPromptRole("superadmin", "user")).toBe(true);
+    expect(hasMinimumPromptRole("user", "superadmin")).toBe(false);
+    expect(hasMinimumPromptRole("admin", "admin")).toBe(true);
+    expect(hasMinimumPromptRole("nope", "admin")).toBe(false);
+    expect(hasMinimumPromptRole("admin", "nope")).toBe(false);
   });
 
   it("fa-auth adapter maps bindings (string and object refresh, fallbacks)", async () => {
