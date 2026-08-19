@@ -17,9 +17,12 @@ import {
 import {
   buildPromptExport,
   promptExportFilename,
+  promptTemplateFacets,
   toPortableTemplate,
   type PromptBlockPublic,
+  type PromptTemplateFacet,
   type PromptTemplatePublic,
+  type PromptTemplateSortField,
   type TemplateBlockPublic,
 } from "@mano8/astro-prompt-m8/schemas";
 import { downloadPromptExport, readPromptExportFile } from "@mano8/astro-prompt-m8/react";
@@ -160,7 +163,8 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   columns: "Columns",
   selected: (selected, total) => `${selected} of ${total} selected`,
   exportLabel: "Export",
-  exportAllLabel: "Export all",
+  // Server-driven table: the rows in hand are one filtered page of templates.
+  exportAllLabel: "Export page",
   importLabel: "Import",
   importError: "Could not import file.",
 };
@@ -179,7 +183,23 @@ const emptyValues: TemplateFormValues = {
 };
 
 const blockTypes = ["role", "task", "context", "instruction", "example", "format"] as const;
-type TemplateSort = "name" | "visibility" | "block_count";
+
+// Sortable headers on the server-driven template table. `satisfies` makes an
+// undeclared column id a compile error instead of a service 422.
+const templateSortColumns = [
+  "name",
+  "is_public",
+  "block_count",
+] as const satisfies readonly PromptTemplateSortField[];
+type TemplateSort = (typeof templateSortColumns)[number];
+
+/** Guard at the header boundary, so an unexpected column id never reaches the wire. */
+function isTemplateSort(value: string | undefined): value is TemplateSort {
+  return value !== undefined && (templateSortColumns as readonly string[]).includes(value);
+}
+
+// The attached-block table below is not a list endpoint — it paginates the
+// blocks embedded in one template — so its vocabulary is local by right.
 type TemplateBlockSort = "name" | "type" | "dynamic" | "visibility" | "position";
 
 interface TemplateTableParams<TSort extends string> {
@@ -253,7 +273,13 @@ export interface PromptTemplateEditorSkinProps {
 
 export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEditorSkinProps) {
   const t = React.useMemo(() => ({ ...DEFAULT_LABELS, ...labels }), [labels]);
-  const templates = usePromptTemplates();
+  const [templateTableParams, setTemplateTableParams] =
+    React.useState<TemplateTableParams<TemplateSort>>(DEFAULT_TEMPLATE_TABLE_PARAMS);
+  // Server-driven: the template toolbar's search, facets, sort and page all
+  // reach `GET /prompt-template/`, and the rows and count come back from it.
+  const templates = usePromptTemplates(templateTableParams);
+  // The block picker below is not a table — it offers blocks to attach — so it
+  // keeps the plain first-page list rather than borrowing the table's params.
   const blocks = usePromptBlocks();
   const { compose, composeMutation } = useComposePrompt();
   const { exportTemplateMutation, importMutation } = usePromptTransfer();
@@ -269,8 +295,6 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
   const [composeError, setComposeError] = React.useState<string | null>(null);
   const [composeContent, setComposeContent] = React.useState<string | null>(null);
   const [copyState, setCopyState] = React.useState<ClipboardCopyState>("idle");
-  const [templateTableParams, setTemplateTableParams] =
-    React.useState<TemplateTableParams<TemplateSort>>(DEFAULT_TEMPLATE_TABLE_PARAMS);
   const [blockTableParams, setBlockTableParams] =
     React.useState<TemplateTableParams<TemplateBlockSort>>(DEFAULT_BLOCK_TABLE_PARAMS);
 
@@ -340,13 +364,14 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     downloadPromptExport(payload, promptExportFilename("template", template.slug));
   }, [exportTemplateMutation]);
 
-  const exportAllTemplates = () => {
-    const allTemplates = templates.data?.data ?? [];
-    if (allTemplates.length === 0) return;
+  /** Bundle the rows currently displayed — the filtered page the service returned. */
+  const exportPageTemplates = () => {
+    const pageTemplates = templates.data?.data ?? [];
+    if (pageTemplates.length === 0) return;
     setTransferStatus(null);
-    const payload = buildPromptExport({ templates: allTemplates.map(toPortableTemplate) });
+    const payload = buildPromptExport({ templates: pageTemplates.map(toPortableTemplate) });
     downloadPromptExport(payload, promptExportFilename("bundle"));
-    setTransferStatus(`Exported ${allTemplates.length} template(s).`);
+    setTransferStatus(`Exported ${pageTemplates.length} template(s).`);
   };
 
   const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -472,7 +497,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       },
       {
         accessorFn: (row) => (row.is_public ? "public" : "private"),
-        id: "visibility",
+        id: "is_public",
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title={t.publicLabel} />
         ),
@@ -642,12 +667,17 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     [activeTemplate, t, templates.removeBlockMutation, templates.setPositionMutation],
   );
 
+  // Declared `f` vocabulary for `GET /prompt-template/`, not a local guess.
+  const templateFacetLabels: Record<PromptTemplateFacet, string> = {
+    public: "Public",
+    private: "Private",
+  };
   const publicFilterOptions: DataTableFilterOptions = {
     title: t.publicLabel,
-    options: [
-      { label: "Public", value: "public" },
-      { label: "Private", value: "private" },
-    ],
+    options: promptTemplateFacets.map((facet) => ({
+      label: templateFacetLabels[facet],
+      value: facet,
+    })),
   };
   const blockFilterOptions: DataTableFilterOptions = {
     title: t.type,
@@ -659,46 +689,6 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       { label: "Private", value: "private" },
     ],
   };
-
-  const filteredTemplates = React.useMemo(() => {
-    const q = templateTableParams.q.trim().toLowerCase();
-    const rows = (templates.data?.data ?? []).filter((template) => {
-      const matchesQuery =
-        q === "" ||
-        template.name.toLowerCase().includes(q) ||
-        template.description?.toLowerCase().includes(q);
-      const activeFilters = templateTableParams.f ? templateTableParams.f.split(",") : [];
-      const matchesFilter =
-        activeFilters.length === 0 ||
-        activeFilters.some((filter) => {
-          if (filter === "public") return template.is_public;
-          if (filter === "private") return !template.is_public;
-          return false;
-        });
-      return matchesQuery && matchesFilter;
-    });
-    const direction = templateTableParams.order === "desc" ? -1 : 1;
-    return rows.sort((left, right) => {
-      const leftValue =
-        templateTableParams.sort === "visibility"
-          ? String(left.is_public)
-          : templateTableParams.sort === "block_count"
-            ? String(left.blocks.length).padStart(8, "0")
-            : left.name;
-      const rightValue =
-        templateTableParams.sort === "visibility"
-          ? String(right.is_public)
-          : templateTableParams.sort === "block_count"
-            ? String(right.blocks.length).padStart(8, "0")
-            : right.name;
-      return leftValue.localeCompare(rightValue) * direction;
-    });
-  }, [templateTableParams, templates.data?.data]);
-
-  const pagedTemplates = React.useMemo(() => {
-    const start = (templateTableParams.page - 1) * templateTableParams.pageSize;
-    return filteredTemplates.slice(start, start + templateTableParams.pageSize);
-  }, [filteredTemplates, templateTableParams.page, templateTableParams.pageSize]);
 
   const filteredTemplateBlocks = React.useMemo(() => {
     const q = blockTableParams.q.trim().toLowerCase();
@@ -759,7 +749,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
             type="button"
             variant="outline"
             disabled={(templates.data?.data.length ?? 0) === 0}
-            onClick={exportAllTemplates}
+            onClick={exportPageTemplates}
           >
             <Download className="mr-2 size-4" />
             {t.exportAllLabel}
@@ -805,9 +795,9 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
       <DataTable
         key="prompt-template-table-actions-v2"
         columns={templateColumns}
-        data={pagedTemplates}
+        data={templates.data?.data ?? []}
         loading={templates.loading}
-        rowCount={filteredTemplates.length}
+        rowCount={templates.data?.count ?? 0}
         page={templateTableParams.page}
         pageSize={templateTableParams.pageSize}
         onPageChange={(page) =>
@@ -822,7 +812,7 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
           setTemplateTableParams((current) => ({
             ...current,
             page: 1,
-            sort: (sort as TemplateSort | undefined) ?? DEFAULT_TEMPLATE_TABLE_PARAMS.sort,
+            sort: isTemplateSort(sort) ? sort : DEFAULT_TEMPLATE_TABLE_PARAMS.sort,
             order: order ?? DEFAULT_TEMPLATE_TABLE_PARAMS.order,
           }))
         }

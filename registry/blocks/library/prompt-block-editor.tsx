@@ -13,9 +13,12 @@ import {
   buildPromptExport,
   hasDynamicContentPlaceholder,
   insertDynamicContentPlaceholder,
+  promptBlockFacets,
   promptExportFilename,
   toPortableBlock,
+  type PromptBlockFacet,
   type PromptBlockPublic,
+  type PromptBlockSortField,
 } from "@mano8/astro-prompt-m8/schemas";
 import { downloadPromptExport, readPromptExportFile } from "@mano8/astro-prompt-m8/react";
 
@@ -128,13 +131,30 @@ const DEFAULT_LABELS: PromptBlockEditorLabels = {
   columns: "Columns",
   selected: (selected, total) => `${selected} of ${total} selected`,
   exportLabel: "Export",
-  exportAllLabel: "Export all",
+  // The table is server-driven, so the rows in hand are one filtered page, not
+  // the whole library. The label says page because the button exports a page.
+  exportAllLabel: "Export page",
   importLabel: "Import",
   importError: "Could not import file.",
 };
 
 const blockTypes = ["role", "task", "context", "instruction", "example", "format"] as const;
-type BlockSort = "name" | "type" | "dynamic" | "visibility";
+
+// The sortable headers this table renders. `satisfies` is the point: a column id
+// the service does not declare in its sort vocabulary fails to compile here
+// rather than reaching the wire as a 422.
+const blockSortColumns = [
+  "name",
+  "type",
+  "is_dynamic",
+  "is_public",
+] as const satisfies readonly PromptBlockSortField[];
+type BlockSort = (typeof blockSortColumns)[number];
+
+/** Guard at the header boundary, so an unexpected column id never reaches the wire. */
+function isBlockSort(value: string | undefined): value is BlockSort {
+  return value !== undefined && (blockSortColumns as readonly string[]).includes(value);
+}
 
 interface BlockTableParams {
   page: number;
@@ -192,16 +212,18 @@ function formatBool(value: boolean, yes: string, no: string) {
 
 export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
   const t = React.useMemo(() => ({ ...DEFAULT_LABELS, ...labels }), [labels]);
+  const [tableParams, setTableParams] =
+    React.useState<BlockTableParams>(DEFAULT_TABLE_PARAMS);
+  // Server-driven: every control the toolbar renders is forwarded, and the rows
+  // and the row count are the service's answer to them.
   const { data, loading, error, createMutation, updateMutation, deleteMutation, refresh } =
-    usePromptBlocks();
+    usePromptBlocks(tableParams);
   const { exportBlockMutation, importMutation } = usePromptTransfer();
   const [editing, setEditing] = React.useState<PromptBlockPublic | null>(null);
   const [open, setOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PromptBlockPublic | null>(null);
   const [transferStatus, setTransferStatus] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const [tableParams, setTableParams] =
-    React.useState<BlockTableParams>(DEFAULT_TABLE_PARAMS);
 
   const form = useForm<BlockFormValues>({
     resolver: zodResolver(blockFormSchema),
@@ -252,13 +274,14 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     downloadPromptExport(payload, promptExportFilename("block", block.slug));
   }, [exportBlockMutation]);
 
-  const exportAllBlocks = () => {
-    const allBlocks = data?.data ?? [];
-    if (allBlocks.length === 0) return;
+  /** Bundle the rows currently displayed — the filtered page the service returned. */
+  const exportPageBlocks = () => {
+    const pageBlocks = data?.data ?? [];
+    if (pageBlocks.length === 0) return;
     setTransferStatus(null);
-    const payload = buildPromptExport({ blocks: allBlocks.map(toPortableBlock) });
+    const payload = buildPromptExport({ blocks: pageBlocks.map(toPortableBlock) });
     downloadPromptExport(payload, promptExportFilename("bundle"));
-    setTransferStatus(`Exported ${allBlocks.length} block(s).`);
+    setTransferStatus(`Exported ${pageBlocks.length} block(s).`);
   };
 
   const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -352,7 +375,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
       },
       {
         accessorFn: (row) => (row.is_dynamic ? "dynamic" : "static"),
-        id: "dynamic",
+        id: "is_dynamic",
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title={t.dynamicLabel} />
         ),
@@ -365,7 +388,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
       },
       {
         accessorFn: (row) => (row.is_public ? "public" : "private"),
-        id: "visibility",
+        id: "is_public",
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title={t.publicLabel} />
         ),
@@ -398,59 +421,24 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     [exportBlock, startEdit, t],
   );
 
+  // Facet options are the service's declared `f` vocabulary, so a selected chip
+  // is always a value the service answers.
+  const facetLabels: Record<PromptBlockFacet, string> = {
+    role: "role",
+    task: "task",
+    context: "context",
+    instruction: "instruction",
+    example: "example",
+    format: "format",
+    dynamic: "Dynamic",
+    static: "Static",
+    public: "Public",
+    private: "Private",
+  };
   const filterOptions: DataTableFilterOptions = {
     title: t.type,
-    options: [
-      ...blockTypes.map((type) => ({ label: type, value: type })),
-      { label: "Dynamic", value: "dynamic" },
-      { label: "Static", value: "static" },
-      { label: "Public", value: "public" },
-      { label: "Private", value: "private" },
-    ],
+    options: promptBlockFacets.map((facet) => ({ label: facetLabels[facet], value: facet })),
   };
-
-  const filteredBlocks = React.useMemo(() => {
-    const q = tableParams.q.trim().toLowerCase();
-    const rows = (data?.data ?? []).filter((block) => {
-      const matchesQuery =
-        q === "" ||
-        block.name.toLowerCase().includes(q) ||
-        block.description?.toLowerCase().includes(q) ||
-        block.content.toLowerCase().includes(q);
-      const activeFilters = tableParams.f ? tableParams.f.split(",") : [];
-      const matchesFilter =
-        activeFilters.length === 0 ||
-        activeFilters.some((filter) => {
-          if (filter === "dynamic") return block.is_dynamic;
-          if (filter === "static") return !block.is_dynamic;
-          if (filter === "public") return block.is_public;
-          if (filter === "private") return !block.is_public;
-          return block.type === filter;
-        });
-      return matchesQuery && matchesFilter;
-    });
-    const direction = tableParams.order === "desc" ? -1 : 1;
-    return rows.sort((left, right) => {
-      const leftValue =
-        tableParams.sort === "dynamic"
-          ? String(left.is_dynamic)
-          : tableParams.sort === "visibility"
-            ? String(left.is_public)
-            : String(left[tableParams.sort]);
-      const rightValue =
-        tableParams.sort === "dynamic"
-          ? String(right.is_dynamic)
-          : tableParams.sort === "visibility"
-            ? String(right.is_public)
-            : String(right[tableParams.sort]);
-      return leftValue.localeCompare(rightValue) * direction;
-    });
-  }, [data?.data, tableParams]);
-
-  const pagedBlocks = React.useMemo(() => {
-    const start = (tableParams.page - 1) * tableParams.pageSize;
-    return filteredBlocks.slice(start, start + tableParams.pageSize);
-  }, [filteredBlocks, tableParams.page, tableParams.pageSize]);
 
   return (
     <section className="not-content space-y-6">
@@ -464,7 +452,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
             type="button"
             variant="outline"
             disabled={(data?.data.length ?? 0) === 0}
-            onClick={exportAllBlocks}
+            onClick={exportPageBlocks}
           >
             <Download className="mr-2 size-4" />
             {t.exportAllLabel}
@@ -508,9 +496,9 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
       <DataTable
         key="prompt-block-table-actions-v2"
         columns={columns}
-        data={pagedBlocks}
+        data={data?.data ?? []}
         loading={loading}
-        rowCount={filteredBlocks.length}
+        rowCount={data?.count ?? 0}
         page={tableParams.page}
         pageSize={tableParams.pageSize}
         onPageChange={(page) => setTableParams((current) => ({ ...current, page }))}
@@ -523,7 +511,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
           setTableParams((current) => ({
             ...current,
             page: 1,
-            sort: (sort as BlockSort | undefined) ?? DEFAULT_TABLE_PARAMS.sort,
+            sort: isBlockSort(sort) ? sort : DEFAULT_TABLE_PARAMS.sort,
             order: order ?? DEFAULT_TABLE_PARAMS.order,
           }))
         }

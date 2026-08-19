@@ -4,7 +4,8 @@ import {
   makeListSchema,
   mergeAndNormalize,
   parseListUrlParams,
-  stringifyListUrlParams
+  stringifyListUrlParams,
+  toServiceListQuery
 } from "../src/runtime/listParams.js";
 
 const schema = () =>
@@ -201,5 +202,60 @@ describe("list params helpers", () => {
         defaultFilter: "private" as "public"
       })
     ).toThrow("defaultFilter must be one of allowedFilters");
+  });
+});
+
+describe("toServiceListQuery", () => {
+  it("carries the whole declared vocabulary to the wire", () => {
+    expect(
+      toServiceListQuery({
+        page: 3,
+        pageSize: 10,
+        q: "hero",
+        csrc: "name",
+        sort: "created_at",
+        order: "desc",
+        f: "role,dynamic"
+      })
+    ).toEqual({
+      skip: 20,
+      limit: 10,
+      q: "hero",
+      csrc: "name",
+      sort: "created_at",
+      order: "desc",
+      f: "role,dynamic"
+    });
+  });
+
+  it("reads a blank parameter as an absent one, like the service does", () => {
+    // An unset table control sends `q=`/`sort=`/`f=`; emitting them would put
+    // parameters on a default request that never carried any.
+    expect(toServiceListQuery({ q: "", csrc: "", sort: "", order: "", f: "  " })).toEqual({
+      skip: 0,
+      limit: 100,
+      q: undefined,
+      csrc: undefined,
+      sort: undefined,
+      order: undefined,
+      f: undefined
+    });
+  });
+
+  it("defaults the offset pair and keeps skip/limit when given", () => {
+    expect(toServiceListQuery({})).toMatchObject({ skip: 0, limit: 100 });
+    expect(toServiceListQuery({ skip: 5, limit: 25 })).toMatchObject({ skip: 5, limit: 25 });
+  });
+
+  it("lets the paginator own the offset when both pairs are supplied", () => {
+    expect(toServiceListQuery({ skip: 999, limit: 999, page: 2, pageSize: 5 })).toMatchObject({
+      skip: 5,
+      limit: 5
+    });
+    // A half-supplied page pair is not a paginator; the offset pair still wins.
+    expect(toServiceListQuery({ skip: 7, limit: 3, page: 2 })).toMatchObject({
+      skip: 7,
+      limit: 3
+    });
   });
 });

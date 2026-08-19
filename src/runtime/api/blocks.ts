@@ -1,6 +1,7 @@
 import { request } from "../client.js";
-import { listParamsToOffset } from "../listParams.js";
+import { toServiceListQuery } from "../listParams.js";
 import {
+  PromptBlockListParamsSchema,
   PromptBlocksPublicSchema,
   ResponseMessageSchema,
   ResponseModelBaseSchema,
@@ -13,15 +14,17 @@ import {
   type ResponseModelBase
 } from "../schemas.js";
 
+/**
+ * List prompt blocks. The whole declared vocabulary — `q`, `csrc`, `sort`,
+ * `order`, `f` — reaches the wire beside the offset pair; the params are parsed
+ * first, so an undeclared value fails here rather than as a service 422.
+ * `count` in the response is the count of the filtered set.
+ */
 export async function listBlocks(params: PromptBlockListParams = {}): Promise<PromptBlocksPublic> {
-  const offset =
-    params.page !== undefined && params.pageSize !== undefined
-      ? listParamsToOffset({ page: params.page, pageSize: params.pageSize })
-      : { skip: params.skip ?? 0, limit: params.limit ?? 100 };
   return request({
     method: "GET",
     path: "/prompt-block/",
-    query: offset,
+    query: toServiceListQuery(PromptBlockListParamsSchema.parse(params)),
     schema: PromptBlocksPublicSchema,
     auth: true
   });

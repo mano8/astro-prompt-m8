@@ -77,6 +77,34 @@ describe("blocks API", () => {
     expect(lastOptions().query).toEqual({ skip: 40, limit: 20 });
   });
 
+  it("list forwards the whole declared vocabulary, not just the offset pair", async () => {
+    requestMock.mockResolvedValueOnce({ data: [], count: 0 });
+    await blocks.listBlocks({
+      page: 2,
+      pageSize: 10,
+      q: "hero",
+      csrc: "description",
+      sort: "is_dynamic",
+      order: "desc",
+      f: "role,dynamic"
+    });
+    expect(lastOptions().query).toEqual({
+      skip: 10,
+      limit: 10,
+      q: "hero",
+      csrc: "description",
+      sort: "is_dynamic",
+      order: "desc",
+      f: "role,dynamic"
+    });
+  });
+
+  it("list refuses an undeclared value before it becomes a service 422", async () => {
+    await expect(blocks.listBlocks({ sort: "dynamic" as "name" })).rejects.toThrow();
+    await expect(blocks.listBlocks({ f: "unknown" })).rejects.toThrow();
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
   it("getBlock returns the data shape when success", async () => {
     requestMock.mockResolvedValueOnce({ success: true, data: validBlock() });
     expect((await blocks.getBlock(7)).id).toBe(1);
@@ -139,6 +167,33 @@ describe("templates API", () => {
     requestMock.mockResolvedValueOnce({ data: [], count: 0 });
     await templates.listTemplates({ page: 4, pageSize: 10 });
     expect(lastOptions().query).toEqual({ skip: 30, limit: 10 });
+  });
+
+  it("list forwards the whole declared vocabulary, block_count included", async () => {
+    requestMock.mockResolvedValueOnce({ data: [], count: 0 });
+    await templates.listTemplates({
+      page: 2,
+      pageSize: 25,
+      q: "brief",
+      csrc: "slug",
+      sort: "block_count",
+      order: "asc",
+      f: "public"
+    });
+    expect(lastOptions().query).toEqual({
+      skip: 25,
+      limit: 25,
+      q: "brief",
+      csrc: "slug",
+      sort: "block_count",
+      order: "asc",
+      f: "public"
+    });
+  });
+
+  it("list refuses a facet the template endpoint does not declare", async () => {
+    await expect(templates.listTemplates({ f: "dynamic" })).rejects.toThrow();
+    expect(requestMock).not.toHaveBeenCalled();
   });
 
   it("getTemplate returns the parsed template", async () => {
@@ -260,6 +315,28 @@ describe("categories API", () => {
     requestMock.mockResolvedValueOnce({ data: [], count: 0 });
     await categories.listCategories();
     expect(lastOptions().query).toEqual({ skip: 0, limit: 100 });
+  });
+
+  it("list forwards q/sort/order — the only list vocabulary /category/ declares", async () => {
+    requestMock.mockResolvedValueOnce({ data: [], count: 0 });
+    await categories.listCategories({ page: 2, pageSize: 5, q: "draft", sort: "type", order: "desc" });
+    expect(lastOptions().query).toEqual({
+      skip: 5,
+      limit: 5,
+      q: "draft",
+      sort: "type",
+      order: "desc"
+    });
+  });
+
+  it("list refuses csrc and f, which /category/ publishes as absent", async () => {
+    await expect(
+      categories.listCategories({ csrc: "name" } as { skip?: number })
+    ).rejects.toThrow();
+    await expect(
+      categories.listCategories({ f: "public" } as { skip?: number })
+    ).rejects.toThrow();
+    expect(requestMock).not.toHaveBeenCalled();
   });
 
   it("getCategory returns null on ResponseMessage", async () => {

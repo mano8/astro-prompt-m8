@@ -365,36 +365,178 @@ export const UsersActivitySchema = z
 export type UsersActivity = z.infer<typeof UsersActivitySchema>;
 
 // ---------------------------------------------------------------------------
-// Misc list-params shape used by hooks
+// Declared list vocabulary — mirrors promt_engine_service/schemas/list_params.py
+//
+// The service publishes the values `q`/`csrc`/`sort`/`order`/`f` may carry, as
+// enums that reach its OpenAPI document verbatim, and answers an undeclared one
+// with a 422 rather than ignoring it. These constants are that vocabulary
+// mirrored — not guessed — so a table control the UI renders is one the service
+// answers. A value listed here and nowhere in the service is a contract break,
+// not a local preference; the contract-fidelity tests are where the two halves
+// are compared.
+//
+// Nothing here carries `vsrc`: the client's URL-state helper has such a field
+// (see `listParams.ts`), the service declares no such parameter, and forwarding
+// it would be a promise no handler keeps.
 // ---------------------------------------------------------------------------
 
-export type PromptBlockListParams = {
-  skip?: number;
-  limit?: number;
-  page?: number;
-  pageSize?: number;
-  q?: string;
-  csrc?: string;
-  vsrc?: string;
-  f?: string;
-  sort?: string;
-  order?: "asc" | "desc";
+/** Upper bound the service puts on `q` and on the joined `f` value. */
+export const MAX_LIST_SEARCH_LENGTH = 200;
+
+/** `f` carries several facet values in one parameter, joined by this. */
+export const LIST_FACET_SEPARATOR = ",";
+
+export const listSortOrders = ["asc", "desc"] as const;
+export type ListSortOrder = (typeof listSortOrders)[number];
+
+/** Columns `q` may scan, and `csrc` may name, on `GET /prompt-block/`. */
+export const promptBlockSearchFields = ["name", "slug", "description", "content"] as const;
+export type PromptBlockSearchField = (typeof promptBlockSearchFields)[number];
+
+/** Columns `sort` may order by on `GET /prompt-block/`. */
+export const promptBlockSortFields = [
+  "id",
+  "name",
+  "slug",
+  "type",
+  "is_dynamic",
+  "is_public",
+  "created_at",
+  "updated_at"
+] as const;
+export type PromptBlockSortField = (typeof promptBlockSortFields)[number];
+
+/** Values `f` may carry on `GET /prompt-block/`; selected facets combine with OR. */
+export const promptBlockFacets = [
+  "role",
+  "task",
+  "context",
+  "instruction",
+  "example",
+  "format",
+  "dynamic",
+  "static",
+  "public",
+  "private"
+] as const;
+export type PromptBlockFacet = (typeof promptBlockFacets)[number];
+
+/** Columns `q` may scan, and `csrc` may name, on `GET /prompt-template/`. */
+export const promptTemplateSearchFields = ["name", "slug", "description"] as const;
+export type PromptTemplateSearchField = (typeof promptTemplateSearchFields)[number];
+
+/**
+ * Columns `sort` may order by on `GET /prompt-template/`. `block_count` is not
+ * a column — the service answers it with a correlated subquery — but the
+ * template table offers that header, so the vocabulary declares it.
+ */
+export const promptTemplateSortFields = [
+  "id",
+  "name",
+  "slug",
+  "is_public",
+  "block_count",
+  "created_at",
+  "updated_at"
+] as const;
+export type PromptTemplateSortField = (typeof promptTemplateSortFields)[number];
+
+/** Values `f` may carry on `GET /prompt-template/`. */
+export const promptTemplateFacets = ["public", "private"] as const;
+export type PromptTemplateFacet = (typeof promptTemplateFacets)[number];
+
+/**
+ * Columns `q` scans on `GET /category/`. Declared for symmetry: the endpoint
+ * offers no `csrc`, so a caller cannot narrow the scan to one of them.
+ */
+export const categorySearchFields = ["name", "slug"] as const;
+export type CategorySearchField = (typeof categorySearchFields)[number];
+
+/** Columns `sort` may order by on `GET /category/`. */
+export const categorySortFields = [
+  "id",
+  "name",
+  "slug",
+  "type",
+  "created_at",
+  "updated_at"
+] as const;
+export type CategorySortField = (typeof categorySortFields)[number];
+
+// ---------------------------------------------------------------------------
+// List-params request schemas
+//
+// Each schema is `.strict()`, so a parameter the endpoint does not declare is a
+// local parse error rather than a query string the service silently drops:
+// `/category/` publishes no `csrc` and no `f`, and that emptiness is part of the
+// contract. An empty string is accepted wherever an enum is, because an unset
+// table control sends `sort=`/`f=` rather than omitting them — the service reads
+// blank as absent (`blank_to_none`) and so does the wire helper.
+// ---------------------------------------------------------------------------
+
+/** Accepts a declared value or the blank string an unset control produces. */
+function enumOrBlank<TValue extends string>(values: readonly [TValue, ...TValue[]]) {
+  return z.enum(values).or(z.literal(""));
+}
+
+/**
+ * A comma-joined facet list, every part of which must be declared. The joined
+ * value is bounded like the service bounds it.
+ */
+function facetList<TValue extends string>(values: readonly TValue[]) {
+  return z
+    .string()
+    .max(MAX_LIST_SEARCH_LENGTH)
+    .refine(
+      (value) =>
+        value === "" ||
+        value
+          .split(LIST_FACET_SEPARATOR)
+          .every((part) => (values as readonly string[]).includes(part)),
+      { message: "Undeclared facet value" }
+    );
+}
+
+const offsetParams = {
+  skip: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).optional(),
+  page: z.number().int().min(1).optional(),
+  pageSize: z.number().int().min(1).optional()
 };
 
-export type PromptTemplateListParams = {
-  skip?: number;
-  limit?: number;
-  page?: number;
-  pageSize?: number;
-  q?: string;
-  csrc?: string;
-  vsrc?: string;
-  f?: string;
-  sort?: string;
-  order?: "asc" | "desc";
-};
+const searchParam = z.string().max(MAX_LIST_SEARCH_LENGTH).optional();
+const orderParam = enumOrBlank(listSortOrders).optional();
 
-export type CategoryListParams = {
-  skip?: number;
-  limit?: number;
-};
+export const PromptBlockListParamsSchema = z
+  .object({
+    ...offsetParams,
+    q: searchParam,
+    csrc: enumOrBlank(promptBlockSearchFields).optional(),
+    sort: enumOrBlank(promptBlockSortFields).optional(),
+    order: orderParam,
+    f: facetList(promptBlockFacets).optional()
+  })
+  .strict();
+export type PromptBlockListParams = z.infer<typeof PromptBlockListParamsSchema>;
+
+export const PromptTemplateListParamsSchema = z
+  .object({
+    ...offsetParams,
+    q: searchParam,
+    csrc: enumOrBlank(promptTemplateSearchFields).optional(),
+    sort: enumOrBlank(promptTemplateSortFields).optional(),
+    order: orderParam,
+    f: facetList(promptTemplateFacets).optional()
+  })
+  .strict();
+export type PromptTemplateListParams = z.infer<typeof PromptTemplateListParamsSchema>;
+
+export const CategoryListParamsSchema = z
+  .object({
+    ...offsetParams,
+    q: searchParam,
+    sort: enumOrBlank(categorySortFields).optional(),
+    order: orderParam
+  })
+  .strict();
+export type CategoryListParams = z.infer<typeof CategoryListParamsSchema>;

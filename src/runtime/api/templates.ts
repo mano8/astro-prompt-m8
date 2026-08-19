@@ -1,8 +1,9 @@
 import { request } from "../client.js";
-import { listParamsToOffset } from "../listParams.js";
+import { toServiceListQuery } from "../listParams.js";
 import { unwrap, unwrapOrNull } from "./blocks.js";
 import {
   ComposedPromptSchema,
+  PromptTemplateListParamsSchema,
   PromptTemplatesPublicSchema,
   ResponseMessageSchema,
   ResponseModelBaseSchema,
@@ -21,17 +22,19 @@ import {
 
 const ModelOrMessage = ResponseModelBaseSchema.or(ResponseMessageSchema);
 
+/**
+ * List prompt templates. Same list contract as `listBlocks` over the template
+ * vocabulary, including `sort=block_count`, which the service answers with a
+ * correlated subquery rather than leaving the header to sort one page against
+ * itself. `count` is the count of the filtered set.
+ */
 export async function listTemplates(
   params: PromptTemplateListParams = {}
 ): Promise<PromptTemplatesPublic> {
-  const offset =
-    params.page !== undefined && params.pageSize !== undefined
-      ? listParamsToOffset({ page: params.page, pageSize: params.pageSize })
-      : { skip: params.skip ?? 0, limit: params.limit ?? 100 };
   return request({
     method: "GET",
     path: "/prompt-template/",
-    query: offset,
+    query: toServiceListQuery(PromptTemplateListParamsSchema.parse(params)),
     schema: PromptTemplatesPublicSchema,
     auth: true
   });
