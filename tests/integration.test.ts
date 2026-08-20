@@ -74,7 +74,9 @@ describe("faPrompt integration", () => {
     expect(addMiddleware).not.toHaveBeenCalled();
     const define = updateConfig.mock.calls[0][0].vite.define;
     expect(define["import.meta.env.PUBLIC_FA_PROMPT_API_BASE"]).toBe(JSON.stringify("/prompt"));
-    expect(define["import.meta.env.PUBLIC_FA_PROMPT_API_PREFIX"]).toBe(JSON.stringify("/fastapi"));
+    // Empty by default: the service mounts its routes under the `API_PREFIX`
+    // that `apiBase` already addresses, so a segment here reaches nothing.
+    expect(define["import.meta.env.PUBLIC_FA_PROMPT_API_PREFIX"]).toBe(JSON.stringify(""));
     expect(logger.warn).not.toHaveBeenCalled();
   });
 

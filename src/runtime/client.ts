@@ -28,7 +28,8 @@ export type PromptRequestOptions<T> = {
 
 /**
  * Resolve a request path against the configured base. `api` resolves to
- * `apiBase + apiPrefix` (e.g. `/prompt/fastapi/...`); `absolute` is for
+ * `apiBase + apiPrefix` (e.g. `/prompt/...`, since `apiPrefix` is empty unless
+ * a proxy adds a segment); `absolute` is for
  * already-fully-qualified URLs. The protocol is pinned to http(s) so a crafted
  * `path` can never smuggle in `javascript:`/`data:`.
  */

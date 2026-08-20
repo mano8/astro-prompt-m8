@@ -99,7 +99,10 @@ export default defineConfig({
   integrations: [
     react(),
     faAuth({ apiBase: "/user" }),                  // list auth BEFORE prompt
-    faPrompt({ apiBase: "/prompt", apiPrefix: "/fastapi", mode: "starter" })
+    // `apiBase` is the whole base: prompt-engine-m8 serves every route under
+    // its own API_PREFIX (`/prompt`). Pass `apiPrefix` only if a proxy in front
+    // of the service adds a further path segment.
+    faPrompt({ apiBase: "/prompt", mode: "starter" })
   ]
 });
 ```

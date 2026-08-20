@@ -20,6 +20,7 @@ import {
 } from "@mano8/astro-prompt-m8/schemas";
 import { toServiceListQuery } from "@mano8/astro-prompt-m8/list-params";
 import { getServiceMeta, runPromptEngineM8Preflight } from "@mano8/astro-prompt-m8/api";
+import { promptUrl } from "@mano8/astro-prompt-m8/client";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`[tarball-consumer] ${message}`);
@@ -85,6 +86,19 @@ assert(typeof getServiceMeta === "function", "the /meta wrapper is not exported"
 assert(
   typeof runPromptEngineM8Preflight === "function",
   "the session preflight is not exported"
+);
+
+// The seam: an untouched install must address the paths prompt-engine-m8
+// mounts. It used to insert a `/fastapi` segment the service has never had, so
+// every request from a default install 404'd. Asserted from the *installed*
+// package, which is the only place a consumer's defaults come from.
+assert(
+  promptUrl("api", "/meta") === "http://localhost/prompt/meta",
+  `default install does not address {API_PREFIX}/meta: ${promptUrl("api", "/meta")}`
+);
+assert(
+  promptUrl("api", "/prompt-block/") === "http://localhost/prompt/prompt-block/",
+  `default install does not address the block list: ${promptUrl("api", "/prompt-block/")}`
 );
 
 console.log("[tarball-consumer] installed package passed the headless smoke");

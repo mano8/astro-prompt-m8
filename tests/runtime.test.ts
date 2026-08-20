@@ -60,7 +60,7 @@ describe("config", () => {
   it("merges partial config, and resets", () => {
     const updated = configurePrompt({ apiBase: "/p" });
     expect(updated.apiBase).toBe("/p");
-    expect(updated.apiPrefix).toBe("/fastapi");
+    expect(updated.apiPrefix).toBe("");
     configurePrompt();
     expect(getPromptConfig().apiBase).toBe("/p");
     resetPromptConfig();
@@ -190,11 +190,36 @@ describe("auth adapter", () => {
 
 describe("promptUrl", () => {
   it("resolves api and absolute bases", () => {
-    configurePrompt({ apiBase: "/prompt", apiPrefix: "/fastapi" });
+    configurePrompt({ apiBase: "/prompt", apiPrefix: "/extra" });
     expect(promptUrl("api", "/prompt-block/")).toBe(
-      "http://localhost/prompt/fastapi/prompt-block/"
+      "http://localhost/prompt/extra/prompt-block/"
     );
     expect(promptUrl("absolute", "https://prompt.test/x")).toBe("https://prompt.test/x");
+  });
+
+  // The seam `C10` exists to check. prompt-engine-m8 mounts every route under
+  // its own `API_PREFIX` — `/prompt/meta`, `/prompt/ping`, `/prompt/category/…`
+  // — and Traefik forwards `PathPrefix('/prompt')` without stripping it. The
+  // default used to insert a `/fastapi` segment the service has never mounted,
+  // so an untouched install sent every request to a 404. These are the exact
+  // paths the service serves; if the default regains a segment they change.
+  it("hits the paths prompt-engine-m8 actually mounts, with no config at all", () => {
+    resetPromptConfig();
+    expect(promptUrl("api", "/meta")).toBe("http://localhost/prompt/meta");
+    expect(promptUrl("api", "/ping")).toBe("http://localhost/prompt/ping");
+    expect(promptUrl("api", "/category/")).toBe("http://localhost/prompt/category/");
+    expect(promptUrl("api", "/prompt-block/")).toBe("http://localhost/prompt/prompt-block/");
+    expect(promptUrl("api", "/prompt-template/")).toBe(
+      "http://localhost/prompt/prompt-template/"
+    );
+    expect(promptUrl("api", "/dashboard/users/activity/")).toBe(
+      "http://localhost/prompt/dashboard/users/activity/"
+    );
+  });
+
+  it("still honours a proxy that does add a segment", () => {
+    configurePrompt({ apiBase: "https://gw.test/prompt", apiPrefix: "/v2" });
+    expect(promptUrl("api", "/meta")).toBe("https://gw.test/prompt/v2/meta");
   });
 
   it("rejects unsupported protocols", () => {
@@ -205,7 +230,7 @@ describe("promptUrl", () => {
 
   it("uses window.location.origin in the browser", () => {
     vi.stubGlobal("window", { location: { origin: "https://app.test" } });
-    expect(promptUrl("api", "/x")).toBe("https://app.test/prompt/fastapi/x");
+    expect(promptUrl("api", "/x")).toBe("https://app.test/prompt/x");
   });
 });
 

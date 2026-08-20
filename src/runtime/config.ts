@@ -1,7 +1,17 @@
 export type PromptRuntimeConfig = {
   /** Browser-facing base used by all requests. Mirror of `PUBLIC_PROMPT_API_BASE`. */
   apiBase: string;
-  /** API prefix from the prompt-engine-m8 service contract. Default `/fastapi`. */
+  /**
+   * Extra path segment between `apiBase` and the route, for a deployment that
+   * puts one there. **Empty by default**, because prompt-engine-m8 mounts every
+   * route — including `/meta` and `/ping` — directly under its own
+   * `API_PREFIX` (`/prompt`), which is what `apiBase` already addresses.
+   *
+   * This defaulted to `/fastapi` and the service has never mounted such a
+   * segment, so a consumer that took the default sent every request to a 404.
+   * The one working deployment overrode it to empty; the default now matches.
+   * `astro-reparto-m8` declares the same empty default.
+   */
   apiPrefix: string;
   /** Header sent on every request so a same-origin stack can pin CSRF. */
   csrfHeader: string;
@@ -21,7 +31,7 @@ export type PromptRuntimeConfig = {
 
 const DEFAULT_CONFIG: PromptRuntimeConfig = {
   apiBase: "/prompt",
-  apiPrefix: "/fastapi",
+  apiPrefix: "",
   csrfHeader: "X-Requested-With",
   adminRole: "admin",
   requestTimeoutMs: 30_000

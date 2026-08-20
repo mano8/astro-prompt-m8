@@ -96,7 +96,8 @@ describe("session compatibility preflight (H5)", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(new URL(url).pathname).toBe("/prompt/fastapi/meta");
+    // The path prompt-engine-m8 actually mounts through `mount_service_meta`.
+    expect(new URL(url).pathname).toBe("/prompt/meta");
     expect(view.seen.at(-1)).toMatchObject({ loading: false, incompatible: false });
     expect(view.seen.at(-1)?.result?.status).toBe("compatible");
     view.unmount();

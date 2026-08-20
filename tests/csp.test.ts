@@ -8,7 +8,7 @@ import {
 describe("originOf", () => {
   it("extracts the origin from an absolute URL", () => {
     expect(originOf("https://prompt.example.com/prompt")).toBe("https://prompt.example.com");
-    expect(originOf("https://prompt.example.com:8443/prompt/fastapi/")).toBe(
+    expect(originOf("https://prompt.example.com:8443/prompt/category/")).toBe(
       "https://prompt.example.com:8443"
     );
   });
