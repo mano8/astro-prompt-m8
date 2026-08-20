@@ -52,6 +52,7 @@
     "build:registry": "node scripts/build-registry.mjs",
     "lint": "eslint .",
     "verify:starter-routes": "node scripts/verify-starter-routes.mjs",
+    "verify:tarball-install": "node scripts/verify-tarball-install.mjs",
     "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run"
