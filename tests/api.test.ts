@@ -257,7 +257,7 @@ describe("templates API", () => {
     requestMock.mockResolvedValueOnce({ success: true, data: {} });
     await templates.addTemplateBlock(3, 4, 2);
     expect(lastOptions()).toMatchObject({
-      method: "GET",
+      method: "POST",
       path: "/prompt-template/3/add-block/4/",
       query: { position: 2 }
     });
@@ -273,7 +273,7 @@ describe("templates API", () => {
     requestMock.mockResolvedValueOnce({ success: true, data: {} });
     await templates.setTemplateBlockPosition(3, 4, 5);
     expect(lastOptions()).toMatchObject({
-      method: "GET",
+      method: "PUT",
       path: "/prompt-template/3/set-block-position/4/",
       query: { position: 5 }
     });

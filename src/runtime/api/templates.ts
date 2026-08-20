@@ -133,13 +133,19 @@ export async function deleteTemplate(templateId: number): Promise<ResponseMessag
   });
 }
 
+/**
+ * Attach a block to a template. `POST`, not `GET`: this changes state, and a
+ * `GET` that mutates is cacheable, prefetchable and link-followable (`H3`).
+ * The service answers `POST` since `2.0.0`; `position` stays a query
+ * parameter, which is what the route declares.
+ */
 export async function addTemplateBlock(
   templateId: number,
   blockId: number,
   position = 0
 ): Promise<ResponseModelBase> {
   return request({
-    method: "GET",
+    method: "POST",
     path: `/prompt-template/${templateId}/add-block/${blockId}/`,
     query: { position },
     schema: ResponseModelBaseSchema,
@@ -147,13 +153,17 @@ export async function addTemplateBlock(
   });
 }
 
+/**
+ * Move a block within a template. `PUT` for the same reason `addTemplateBlock`
+ * is `POST`, and because reordering is idempotent for a given position.
+ */
 export async function setTemplateBlockPosition(
   templateId: number,
   blockId: number,
   position = 1
 ): Promise<ResponseModelBase> {
   return request({
-    method: "GET",
+    method: "PUT",
     path: `/prompt-template/${templateId}/set-block-position/${blockId}/`,
     query: { position },
     schema: ResponseModelBaseSchema,
