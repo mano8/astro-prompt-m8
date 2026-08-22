@@ -140,6 +140,45 @@ describe("category & response schemas", () => {
     expect(s.CategoriesPublicSchema.parse({ data: [category()], count: 1 }).count).toBe(1);
   });
 
+  it("requires `type` on a category create, as the service does (H2)", () => {
+    expect(s.CategoryCreateSchema.parse({ name: "x", type: "prompt_block" })).toEqual({
+      name: "x",
+      type: "prompt_block"
+    });
+    expect(s.CategoryCreateSchema.parse({ name: "x", type: "prompt_template" }).type).toBe(
+      "prompt_template"
+    );
+    // The gap `H2` names: this parsed locally and 422'd on the wire.
+    expect(() => s.CategoryCreateSchema.parse({ name: "x" })).toThrow();
+    expect(() => s.CategoryCreateSchema.parse({ name: "x", type: "other" })).toThrow();
+    // The service derives `slug` from `name` and overwrites whatever arrives,
+    // so offering the field would publish a knob that does nothing.
+    expect(() =>
+      s.CategoryCreateSchema.parse({ name: "x", type: "prompt_block", slug: "x" })
+    ).toThrow();
+    // Update reuses the create shape, exactly as `CategoryUpdate` does.
+    expect(() => s.CategoryUpdateSchema.parse({ name: "x" })).toThrow();
+  });
+
+  it("reads the shared /meta payload leniently but pins what it uses", () => {
+    const meta = {
+      service: "prompt-engine-m8",
+      version: "2.0.0",
+      api_version: "v1",
+      contract: { name: "prompt-engine-m8", version: "2.0.0", range: ">=2.0.0 <3.0.0" }
+    };
+    expect(s.ServiceMetaSchema.parse(meta)).toMatchObject(meta);
+    // A field added to the shared schema must not break the preflight.
+    expect(s.ServiceMetaSchema.parse({ ...meta, build: "abc" })).toMatchObject({ build: "abc" });
+    expect(
+      s.ServiceContractSchema.parse({ ...meta.contract, deprecated: [] }).name
+    ).toBe("prompt-engine-m8");
+    // What the preflight reads is still required.
+    expect(() => s.ServiceMetaSchema.parse({ ...meta, version: "" })).toThrow();
+    expect(() => s.ServiceMetaSchema.parse({ ...meta, contract: {} })).toThrow();
+    expect(() => s.ServiceMetaSchema.parse({ service: meta.service })).toThrow();
+  });
+
   it("response model/message envelopes", () => {
     expect(s.ResponseMessageSchema.parse({ success: true, msg: "ok" }).success).toBe(true);
     expect(() => s.ResponseMessageSchema.parse({ success: "x" })).toThrow();
@@ -240,5 +279,129 @@ describe("dashboard schemas", () => {
     expect(s.UsersActivitySchema.parse(payload).nb_users).toBe(4);
     expect(s.ActivityCounterSchema.parse({ model: "X", updated: 1, added: 2 }).added).toBe(2);
     expect(() => s.ActivityStatsSchema.parse({ min: 0, max: 0, activity: [] })).not.toThrow();
+  });
+});
+
+describe("declared list vocabulary", () => {
+  it("declares every block facet the block library can select", () => {
+    // The six type facets mirror PromptBlockType one-for-one; the four
+    // remaining ones are the two boolean axes the table filters on.
+    expect(s.promptBlockFacets).toEqual([
+      ...s.PromptBlockTypeSchema.options,
+      "dynamic",
+      "static",
+      "public",
+      "private"
+    ]);
+    expect(s.promptTemplateFacets).toEqual(["public", "private"]);
+  });
+
+  it("declares the column names the service orders by, not the UI's labels", () => {
+    // `is_dynamic`/`is_public` are the service's column names. A table header
+    // labelled "Dynamic" must still emit `is_dynamic`.
+    expect(s.promptBlockSortFields).toContain("is_dynamic");
+    expect(s.promptBlockSortFields).toContain("is_public");
+    expect(s.promptBlockSortFields).not.toContain("dynamic");
+    expect(s.promptBlockSortFields).not.toContain("visibility");
+    expect(s.promptTemplateSortFields).toContain("block_count");
+    expect(s.promptTemplateSortFields).not.toContain("visibility");
+  });
+
+  it("keeps csrc within the columns q scans", () => {
+    for (const field of s.promptBlockSearchFields) {
+      expect(s.promptBlockSortFields.includes(field as never)).toBe(
+        ["name", "slug"].includes(field)
+      );
+    }
+    expect(s.promptTemplateSearchFields.every((field) => typeof field === "string")).toBe(true);
+    // `/category/` publishes search columns but no `csrc`; the emptiness is the
+    // contract, so the params schema must not accept one.
+    expect(s.categorySearchFields).toEqual(["name", "slug"]);
+  });
+});
+
+describe("list-params request schemas", () => {
+  it("accepts every declared value on the block endpoint", () => {
+    for (const csrc of s.promptBlockSearchFields) {
+      expect(s.PromptBlockListParamsSchema.parse({ csrc }).csrc).toBe(csrc);
+    }
+    for (const sort of s.promptBlockSortFields) {
+      expect(s.PromptBlockListParamsSchema.parse({ sort }).sort).toBe(sort);
+    }
+    for (const facet of s.promptBlockFacets) {
+      expect(s.PromptBlockListParamsSchema.parse({ f: facet }).f).toBe(facet);
+    }
+    for (const order of s.listSortOrders) {
+      expect(s.PromptBlockListParamsSchema.parse({ order }).order).toBe(order);
+    }
+  });
+
+  it("accepts every declared value on the template and category endpoints", () => {
+    for (const csrc of s.promptTemplateSearchFields) {
+      expect(s.PromptTemplateListParamsSchema.parse({ csrc }).csrc).toBe(csrc);
+    }
+    for (const sort of s.promptTemplateSortFields) {
+      expect(s.PromptTemplateListParamsSchema.parse({ sort }).sort).toBe(sort);
+    }
+    for (const facet of s.promptTemplateFacets) {
+      expect(s.PromptTemplateListParamsSchema.parse({ f: facet }).f).toBe(facet);
+    }
+    for (const sort of s.categorySortFields) {
+      expect(s.CategoryListParamsSchema.parse({ sort }).sort).toBe(sort);
+    }
+  });
+
+  it("reads a blank enum as the unset control it is", () => {
+    expect(s.PromptBlockListParamsSchema.parse({ sort: "", csrc: "", order: "", f: "" })).toEqual({
+      sort: "",
+      csrc: "",
+      order: "",
+      f: ""
+    });
+    expect(s.CategoryListParamsSchema.parse({ sort: "", order: "" }).sort).toBe("");
+  });
+
+  it("rejects an undeclared value rather than letting the service 422", () => {
+    expect(() => s.PromptBlockListParamsSchema.parse({ sort: "dynamic" })).toThrow();
+    expect(() => s.PromptBlockListParamsSchema.parse({ csrc: "type" })).toThrow();
+    expect(() => s.PromptBlockListParamsSchema.parse({ order: "ASC" })).toThrow();
+    expect(() => s.PromptTemplateListParamsSchema.parse({ sort: "content" })).toThrow();
+    expect(() => s.PromptTemplateListParamsSchema.parse({ f: "dynamic" })).toThrow();
+    expect(() => s.CategoryListParamsSchema.parse({ sort: "content" })).toThrow();
+  });
+
+  it("rejects a parameter the endpoint does not declare", () => {
+    // `/category/` offers no `csrc` and no `f`. Sending either would be a
+    // control the service never answers.
+    expect(() => s.CategoryListParamsSchema.parse({ csrc: "name" })).toThrow();
+    expect(() => s.CategoryListParamsSchema.parse({ f: "public" })).toThrow();
+    // `vsrc` is URL state, not a service parameter.
+    expect(() => s.PromptBlockListParamsSchema.parse({ vsrc: "hero" })).toThrow();
+  });
+
+  it("accepts a comma-joined facet list and rejects one with an undeclared part", () => {
+    expect(s.PromptBlockListParamsSchema.parse({ f: "role,dynamic,public" }).f).toBe(
+      "role,dynamic,public"
+    );
+    expect(() => s.PromptBlockListParamsSchema.parse({ f: "role,unknown" })).toThrow();
+    expect(() =>
+      s.PromptBlockListParamsSchema.parse({ f: "role,".repeat(s.MAX_LIST_SEARCH_LENGTH) })
+    ).toThrow();
+  });
+
+  it("bounds q the way the service bounds it", () => {
+    expect(
+      s.PromptBlockListParamsSchema.parse({ q: "x".repeat(s.MAX_LIST_SEARCH_LENGTH) }).q
+    ).toHaveLength(s.MAX_LIST_SEARCH_LENGTH);
+    expect(() =>
+      s.PromptBlockListParamsSchema.parse({ q: "x".repeat(s.MAX_LIST_SEARCH_LENGTH + 1) })
+    ).toThrow();
+  });
+
+  it("rejects an offset that cannot address a page", () => {
+    expect(() => s.PromptBlockListParamsSchema.parse({ skip: -1 })).toThrow();
+    expect(() => s.PromptBlockListParamsSchema.parse({ limit: 0 })).toThrow();
+    expect(() => s.PromptBlockListParamsSchema.parse({ page: 0 })).toThrow();
+    expect(() => s.PromptBlockListParamsSchema.parse({ pageSize: 0 })).toThrow();
   });
 });

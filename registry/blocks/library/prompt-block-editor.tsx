@@ -8,14 +8,21 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Download, Plus, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { usePromptBlocks, usePromptTransfer } from "@mano8/astro-prompt-m8/hooks";
+import {
+  usePromptBlocks,
+  usePromptCompatibility,
+  usePromptTransfer,
+} from "@mano8/astro-prompt-m8/hooks";
 import {
   buildPromptExport,
   hasDynamicContentPlaceholder,
   insertDynamicContentPlaceholder,
+  promptBlockFacets,
   promptExportFilename,
   toPortableBlock,
+  type PromptBlockFacet,
   type PromptBlockPublic,
+  type PromptBlockSortField,
 } from "@mano8/astro-prompt-m8/schemas";
 import { downloadPromptExport, readPromptExportFile } from "@mano8/astro-prompt-m8/react";
 
@@ -25,6 +32,11 @@ import {
   type DataTableSortDirection,
 } from "@/components/m8-ui/data-table";
 import { DataTableColumnHeader } from "@/components/m8-ui/data-table-column-header";
+import { StateError } from "@/components/m8-ui/state-error";
+import {
+  ToastNotificationHost,
+  toastNotification,
+} from "@/components/m8-ui/toast-notification";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -97,6 +109,15 @@ export interface PromptBlockEditorLabels {
   exportAllLabel: string;
   importLabel: string;
   importError: string;
+  saved: string;
+  saveFailed: string;
+  deleted: string;
+  deleteFailed: string;
+  exported: (count: number) => string;
+  exportFailed: string;
+  imported: (created: number, reused: number) => string;
+  incompatibleTitle: string;
+  incompatibleRetry: string;
 }
 
 const DEFAULT_LABELS: PromptBlockEditorLabels = {
@@ -128,13 +149,39 @@ const DEFAULT_LABELS: PromptBlockEditorLabels = {
   columns: "Columns",
   selected: (selected, total) => `${selected} of ${total} selected`,
   exportLabel: "Export",
-  exportAllLabel: "Export all",
+  // The table is server-driven, so the rows in hand are one filtered page, not
+  // the whole library. The label says page because the button exports a page.
+  exportAllLabel: "Export page",
   importLabel: "Import",
   importError: "Could not import file.",
+  saved: "Prompt block saved.",
+  saveFailed: "Could not save the prompt block.",
+  deleted: "Prompt block deleted.",
+  deleteFailed: "Could not delete the prompt block.",
+  exported: (count) => `Exported ${count} block(s).`,
+  exportFailed: "Could not export.",
+  imported: (created, reused) => `Imported ${created} new, ${reused} reused.`,
+  incompatibleTitle: "Prompt service unavailable",
+  incompatibleRetry: "Reload",
 };
 
 const blockTypes = ["role", "task", "context", "instruction", "example", "format"] as const;
-type BlockSort = "name" | "type" | "dynamic" | "visibility";
+
+// The sortable headers this table renders. `satisfies` is the point: a column id
+// the service does not declare in its sort vocabulary fails to compile here
+// rather than reaching the wire as a 422.
+const blockSortColumns = [
+  "name",
+  "type",
+  "is_dynamic",
+  "is_public",
+] as const satisfies readonly PromptBlockSortField[];
+type BlockSort = (typeof blockSortColumns)[number];
+
+/** Guard at the header boundary, so an unexpected column id never reaches the wire. */
+function isBlockSort(value: string | undefined): value is BlockSort {
+  return value !== undefined && (blockSortColumns as readonly string[]).includes(value);
+}
 
 interface BlockTableParams {
   page: number;
@@ -192,16 +239,20 @@ function formatBool(value: boolean, yes: string, no: string) {
 
 export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
   const t = React.useMemo(() => ({ ...DEFAULT_LABELS, ...labels }), [labels]);
+  const [tableParams, setTableParams] =
+    React.useState<BlockTableParams>(DEFAULT_TABLE_PARAMS);
+  // Server-driven: every control the toolbar renders is forwarded, and the rows
+  // and the row count are the service's answer to them.
   const { data, loading, error, createMutation, updateMutation, deleteMutation, refresh } =
-    usePromptBlocks();
+    usePromptBlocks(tableParams);
   const { exportBlockMutation, importMutation } = usePromptTransfer();
+  // `H5`: the session `GET /meta` preflight. A host pointed at the wrong M8
+  // service gets the shared error state, not four failing requests.
+  const compatibility = usePromptCompatibility();
   const [editing, setEditing] = React.useState<PromptBlockPublic | null>(null);
   const [open, setOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PromptBlockPublic | null>(null);
-  const [transferStatus, setTransferStatus] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const [tableParams, setTableParams] =
-    React.useState<BlockTableParams>(DEFAULT_TABLE_PARAMS);
 
   const form = useForm<BlockFormValues>({
     resolver: zodResolver(blockFormSchema),
@@ -232,48 +283,60 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     setOpen(true);
   }, [form]);
 
+  // Every mutation reports through the shared toast contract (`H7`) — the same
+  // one auth and reparto use — so feedback reads the same across the fleet
+  // instead of one surface printing a paragraph and another saying nothing.
   const save = async (values: BlockFormValues) => {
     const body = {
       ...values,
       description: values.description?.trim() ? values.description.trim() : null,
     };
-    if (editing) {
-      await updateMutation.mutateAsync({ blockId: editing.id, body });
-    } else {
-      await createMutation.mutateAsync(body);
+    try {
+      if (editing) {
+        await updateMutation.mutateAsync({ blockId: editing.id, body });
+      } else {
+        await createMutation.mutateAsync(body);
+      }
+    } catch {
+      toastNotification.error({ title: t.saveFailed });
+      return;
     }
+    toastNotification.success({ title: t.saved });
     setOpen(false);
     setEditing(null);
   };
 
   const exportBlock = React.useCallback(async (block: PromptBlockPublic) => {
-    setTransferStatus(null);
-    const payload = await exportBlockMutation.mutateAsync(block.id);
-    downloadPromptExport(payload, promptExportFilename("block", block.slug));
-  }, [exportBlockMutation]);
+    try {
+      const payload = await exportBlockMutation.mutateAsync(block.id);
+      downloadPromptExport(payload, promptExportFilename("block", block.slug));
+      toastNotification.success({ title: t.exported(1) });
+    } catch {
+      toastNotification.error({ title: t.exportFailed });
+    }
+  }, [exportBlockMutation, t]);
 
-  const exportAllBlocks = () => {
-    const allBlocks = data?.data ?? [];
-    if (allBlocks.length === 0) return;
-    setTransferStatus(null);
-    const payload = buildPromptExport({ blocks: allBlocks.map(toPortableBlock) });
+  /** Bundle the rows currently displayed — the filtered page the service returned. */
+  const exportPageBlocks = () => {
+    const pageBlocks = data?.data ?? [];
+    if (pageBlocks.length === 0) return;
+    const payload = buildPromptExport({ blocks: pageBlocks.map(toPortableBlock) });
     downloadPromptExport(payload, promptExportFilename("bundle"));
-    setTransferStatus(`Exported ${allBlocks.length} block(s).`);
+    toastNotification.success({ title: t.exported(pageBlocks.length) });
   };
 
   const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    setTransferStatus(null);
     try {
       const parsed = await readPromptExportFile(file);
       const result = await importMutation.mutateAsync(parsed);
-      setTransferStatus(
-        `Imported ${result.blocks.created.length} new, ${result.blocks.reused.length} reused.`,
-      );
+      toastNotification.success({
+        title: t.imported(result.blocks.created.length, result.blocks.reused.length),
+      });
     } catch {
-      setTransferStatus(t.importError);
+      toastNotification.error({ title: t.importError });
     }
   };
 
@@ -352,7 +415,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
       },
       {
         accessorFn: (row) => (row.is_dynamic ? "dynamic" : "static"),
-        id: "dynamic",
+        id: "is_dynamic",
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title={t.dynamicLabel} />
         ),
@@ -365,7 +428,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
       },
       {
         accessorFn: (row) => (row.is_public ? "public" : "private"),
-        id: "visibility",
+        id: "is_public",
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title={t.publicLabel} />
         ),
@@ -398,62 +461,43 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     [exportBlock, startEdit, t],
   );
 
+  // Facet options are the service's declared `f` vocabulary, so a selected chip
+  // is always a value the service answers.
+  const facetLabels: Record<PromptBlockFacet, string> = {
+    role: "role",
+    task: "task",
+    context: "context",
+    instruction: "instruction",
+    example: "example",
+    format: "format",
+    dynamic: "Dynamic",
+    static: "Static",
+    public: "Public",
+    private: "Private",
+  };
   const filterOptions: DataTableFilterOptions = {
     title: t.type,
-    options: [
-      ...blockTypes.map((type) => ({ label: type, value: type })),
-      { label: "Dynamic", value: "dynamic" },
-      { label: "Static", value: "static" },
-      { label: "Public", value: "public" },
-      { label: "Private", value: "private" },
-    ],
+    options: promptBlockFacets.map((facet) => ({ label: facetLabels[facet], value: facet })),
   };
 
-  const filteredBlocks = React.useMemo(() => {
-    const q = tableParams.q.trim().toLowerCase();
-    const rows = (data?.data ?? []).filter((block) => {
-      const matchesQuery =
-        q === "" ||
-        block.name.toLowerCase().includes(q) ||
-        block.description?.toLowerCase().includes(q) ||
-        block.content.toLowerCase().includes(q);
-      const activeFilters = tableParams.f ? tableParams.f.split(",") : [];
-      const matchesFilter =
-        activeFilters.length === 0 ||
-        activeFilters.some((filter) => {
-          if (filter === "dynamic") return block.is_dynamic;
-          if (filter === "static") return !block.is_dynamic;
-          if (filter === "public") return block.is_public;
-          if (filter === "private") return !block.is_public;
-          return block.type === filter;
-        });
-      return matchesQuery && matchesFilter;
-    });
-    const direction = tableParams.order === "desc" ? -1 : 1;
-    return rows.sort((left, right) => {
-      const leftValue =
-        tableParams.sort === "dynamic"
-          ? String(left.is_dynamic)
-          : tableParams.sort === "visibility"
-            ? String(left.is_public)
-            : String(left[tableParams.sort]);
-      const rightValue =
-        tableParams.sort === "dynamic"
-          ? String(right.is_dynamic)
-          : tableParams.sort === "visibility"
-            ? String(right.is_public)
-            : String(right[tableParams.sort]);
-      return leftValue.localeCompare(rightValue) * direction;
-    });
-  }, [data?.data, tableParams]);
-
-  const pagedBlocks = React.useMemo(() => {
-    const start = (tableParams.page - 1) * tableParams.pageSize;
-    return filteredBlocks.slice(start, start + tableParams.pageSize);
-  }, [filteredBlocks, tableParams.page, tableParams.pageSize]);
+  // An incompatible service surfaces the shared error state rather than a wall
+  // of failed requests: nothing below this point can work against it.
+  if (compatibility.incompatible) {
+    return (
+      <section className="not-content space-y-6">
+        <StateError
+          title={t.incompatibleTitle}
+          description={compatibility.reason ?? t.error}
+          retryLabel={t.incompatibleRetry}
+          onRetry={() => window.location.reload()}
+        />
+      </section>
+    );
+  }
 
   return (
     <section className="not-content space-y-6">
+      <ToastNotificationHost />
       <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
         <div className="space-y-2">
           <h2 className="text-xl font-semibold tracking-tight">{t.title}</h2>
@@ -464,7 +508,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
             type="button"
             variant="outline"
             disabled={(data?.data.length ?? 0) === 0}
-            onClick={exportAllBlocks}
+            onClick={exportPageBlocks}
           >
             <Download className="mr-2 size-4" />
             {t.exportAllLabel}
@@ -492,13 +536,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
         </div>
       </div>
 
-      {transferStatus ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          {transferStatus}
-        </p>
-      ) : null}
-
-      {loading && !data ? <p className="text-sm text-muted-foreground">{t.loading}</p> : null}
+      {loading && !data ?  <p className="text-sm text-muted-foreground">{t.loading}</p> : null}
       {error && !data ? (
         <p role="alert" className="text-sm text-destructive">
           {t.error}
@@ -508,9 +546,9 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
       <DataTable
         key="prompt-block-table-actions-v2"
         columns={columns}
-        data={pagedBlocks}
+        data={data?.data ?? []}
         loading={loading}
-        rowCount={filteredBlocks.length}
+        rowCount={data?.count ?? 0}
         page={tableParams.page}
         pageSize={tableParams.pageSize}
         onPageChange={(page) => setTableParams((current) => ({ ...current, page }))}
@@ -523,7 +561,7 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
           setTableParams((current) => ({
             ...current,
             page: 1,
-            sort: (sort as BlockSort | undefined) ?? DEFAULT_TABLE_PARAMS.sort,
+            sort: isBlockSort(sort) ? sort : DEFAULT_TABLE_PARAMS.sort,
             order: order ?? DEFAULT_TABLE_PARAMS.order,
           }))
         }
@@ -698,7 +736,11 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
               disabled={deleteMutation.isPending}
               onClick={() => {
                 if (!deleting) return;
-                void deleteMutation.mutateAsync(deleting.id).finally(() => setDeleting(null));
+                void deleteMutation
+                  .mutateAsync(deleting.id)
+                  .then(() => toastNotification.success({ title: t.deleted }))
+                  .catch(() => toastNotification.error({ title: t.deleteFailed }))
+                  .finally(() => setDeleting(null));
               }}
             >
               {t.deleteLabel}

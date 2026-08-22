@@ -49,10 +49,16 @@ export function createInternalPromptClient(
   const headers = { Authorization: `Bearer ${token}` };
 
   return {
+    // `{API_PREFIX}/ping` — the dependency-free liveness route every M8 service
+    // mounts through `auth_sdk_m8.controllers.meta`. This used to call the
+    // prefix root (`H4`), which prompt-engine-m8 deliberately leaves unmounted:
+    // a 404 that read as "the service is down". The service side is pinned by
+    // the contract-fidelity tests (`{API_PREFIX}/ping` → 200, `{API_PREFIX}/` →
+    // 404), so this path is a fixed target rather than a hopeful one.
     async ping() {
       await request({
         method: "GET",
-        path: "/",
+        path: "/ping",
         headers,
         skipRefresh: true
       });

@@ -45,5 +45,9 @@ describe("internal server client", () => {
     const [opts] = requestMock.mock.calls[0];
     expect(opts.headers.Authorization).toBe("Bearer svc");
     expect(opts.skipRefresh).toBe(true);
+    // `H4`: the prefix root is deliberately unmounted (`{API_PREFIX}/` → 404);
+    // `{API_PREFIX}/ping` is the liveness route every M8 service mounts.
+    expect(opts.method).toBe("GET");
+    expect(opts.path).toBe("/ping");
   });
 });

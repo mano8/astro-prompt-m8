@@ -7,3 +7,4 @@ export * from "./useComposePrompt.js";
 export * from "./usePromptAdmin.js";
 export * from "./usePromptDashboard.js";
 export * from "./usePromptTransfer.js";
+export * from "./usePromptCompatibility.js";

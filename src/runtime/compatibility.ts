@@ -1,9 +1,13 @@
 export const PROMPT_ENGINE_M8_CONTRACT_ID = "prompt-engine-m8";
-export const PROMPT_ENGINE_M8_CONTRACT_VERSION = "1.0";
+export const PROMPT_ENGINE_M8_CONTRACT_VERSION = "2.0.0";
 export const PROMPT_ENGINE_M8_CONTRACT = `${PROMPT_ENGINE_M8_CONTRACT_ID}@${PROMPT_ENGINE_M8_CONTRACT_VERSION}` as const;
-export const PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION = "1.1.0";
-export const PROMPT_ENGINE_M8_MIN_SERVICE_VERSION = "1.0.0";
-export const PROMPT_ENGINE_M8_MAX_SERVICE_VERSION_EXCLUSIVE = "2.0.0";
+// The service-version axis mirrors prompt-engine-m8's own CONTRACT_RANGE
+// (``>=2.0.0 <3.0.0``). It is orthogonal to the contract axis above and was left
+// on the 1.x baseline when the contract moved to 2.0.0, which made this guard
+// reject the very service it targets (prompt-engine-m8 serves version 2.0.0).
+export const PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION = "2.0.0";
+export const PROMPT_ENGINE_M8_MIN_SERVICE_VERSION = "2.0.0";
+export const PROMPT_ENGINE_M8_MAX_SERVICE_VERSION_EXCLUSIVE = "3.0.0";
 export const PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE = `>=${PROMPT_ENGINE_M8_MIN_SERVICE_VERSION} <${PROMPT_ENGINE_M8_MAX_SERVICE_VERSION_EXCLUSIVE}`;
 
 export type PromptEngineM8CompatibilityStatus = "compatible" | "incompatible" | "unknown";
@@ -37,6 +41,22 @@ function stringValue(value: unknown): string | undefined {
 function contractObjectVersion(value: unknown): string | undefined {
   if (typeof value === "object" && value !== null) {
     return stringValue((value as { version?: unknown }).version);
+  }
+  return undefined;
+}
+
+// Read ``contract.name`` from the GET /meta nested contract object.
+//
+// The flat-string contract forms carry the issuer id inline (``prompt-engine-m8@2.0.0``)
+// and are checked against it, but the nested object splits id and version apart.
+// Without reading ``name`` the version check alone would bless any service whose
+// contract happens to sit at the same version - and ``mount_service_meta`` is a
+// shared auth-sdk-m8 helper, so every M8 service serves this same payload shape
+// at ``{API_PREFIX}/meta``. A host pointed at the wrong sibling is exactly the
+// misconfiguration the preflight exists to name.
+function contractObjectName(value: unknown): string | undefined {
+  if (typeof value === "object" && value !== null) {
+    return stringValue((value as { name?: unknown }).name);
   }
   return undefined;
 }
@@ -93,6 +113,22 @@ export function getPromptEngineM8Compatibility(
     stringValue(metadata.prompt_engine_m8_version) ??
     stringValue(metadata.service_version) ??
     stringValue(metadata.version);
+
+  // Checked before the version, so a wrong service is reported as a wrong
+  // service rather than as a version mismatch. Only applies when the payload
+  // names an id at all - a nested contract without a `name` still falls through
+  // to the version comparison below.
+  const contractName = contractObjectName(metadata.contract);
+  if (contractName && contractName !== PROMPT_ENGINE_M8_CONTRACT_ID) {
+    return {
+      status: "incompatible",
+      expectedContract: PROMPT_ENGINE_M8_CONTRACT,
+      expectedServiceVersionRange: PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE,
+      contractVersion,
+      serviceVersion,
+      reason: `Expected ${PROMPT_ENGINE_M8_CONTRACT}, received the ${contractName} contract - check the configured prompt API base`
+    };
+  }
 
   if (
     contractVersion &&

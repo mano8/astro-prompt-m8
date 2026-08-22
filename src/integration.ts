@@ -5,7 +5,11 @@ import { buildPromptCspPolicy, type PromptCspOptions } from "./lib/csp.js";
 export type FaPromptAstroOptions = {
   /** Browser-facing base of the prompt-engine-m8 service. Defaults to `/prompt`. */
   apiBase?: string;
-  /** FastAPI prefix on the service contract. Defaults to `/fastapi`. */
+  /**
+   * Extra path segment between `apiBase` and the route. Defaults to `""` —
+   * prompt-engine-m8 mounts its routes directly under its own `API_PREFIX`,
+   * which `apiBase` addresses. Set it only for a proxy that adds a segment.
+   */
   apiPrefix?: string;
   mode?: "headless" | "starter";
   output?: "static" | "server" | "hybrid";
@@ -72,7 +76,7 @@ export default function faPrompt(options: FaPromptAstroOptions = {}): AstroInteg
   const provider = options.auth?.provider ?? "fa-auth-astro";
   const routes = buildPromptRoutes(options.routes);
   const apiBase = options.apiBase ?? "/prompt";
-  const apiPrefix = options.apiPrefix ?? "/fastapi";
+  const apiPrefix = options.apiPrefix ?? "";
 
   const cspEnabled = options.csp?.enabled !== false;
   const middlewareActive = options.guards?.middleware === true;

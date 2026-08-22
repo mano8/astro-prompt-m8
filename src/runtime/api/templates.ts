@@ -1,8 +1,9 @@
 import { request } from "../client.js";
-import { listParamsToOffset } from "../listParams.js";
+import { toServiceListQuery } from "../listParams.js";
 import { unwrap, unwrapOrNull } from "./blocks.js";
 import {
   ComposedPromptSchema,
+  PromptTemplateListParamsSchema,
   PromptTemplatesPublicSchema,
   ResponseMessageSchema,
   ResponseModelBaseSchema,
@@ -21,17 +22,19 @@ import {
 
 const ModelOrMessage = ResponseModelBaseSchema.or(ResponseMessageSchema);
 
+/**
+ * List prompt templates. Same list contract as `listBlocks` over the template
+ * vocabulary, including `sort=block_count`, which the service answers with a
+ * correlated subquery rather than leaving the header to sort one page against
+ * itself. `count` is the count of the filtered set.
+ */
 export async function listTemplates(
   params: PromptTemplateListParams = {}
 ): Promise<PromptTemplatesPublic> {
-  const offset =
-    params.page !== undefined && params.pageSize !== undefined
-      ? listParamsToOffset({ page: params.page, pageSize: params.pageSize })
-      : { skip: params.skip ?? 0, limit: params.limit ?? 100 };
   return request({
     method: "GET",
     path: "/prompt-template/",
-    query: offset,
+    query: toServiceListQuery(PromptTemplateListParamsSchema.parse(params)),
     schema: PromptTemplatesPublicSchema,
     auth: true
   });
@@ -130,13 +133,19 @@ export async function deleteTemplate(templateId: number): Promise<ResponseMessag
   });
 }
 
+/**
+ * Attach a block to a template. `POST`, not `GET`: this changes state, and a
+ * `GET` that mutates is cacheable, prefetchable and link-followable (`H3`).
+ * The service answers `POST` since `2.0.0`; `position` stays a query
+ * parameter, which is what the route declares.
+ */
 export async function addTemplateBlock(
   templateId: number,
   blockId: number,
   position = 0
 ): Promise<ResponseModelBase> {
   return request({
-    method: "GET",
+    method: "POST",
     path: `/prompt-template/${templateId}/add-block/${blockId}/`,
     query: { position },
     schema: ResponseModelBaseSchema,
@@ -144,13 +153,17 @@ export async function addTemplateBlock(
   });
 }
 
+/**
+ * Move a block within a template. `PUT` for the same reason `addTemplateBlock`
+ * is `POST`, and because reordering is idempotent for a given position.
+ */
 export async function setTemplateBlockPosition(
   templateId: number,
   blockId: number,
   position = 1
 ): Promise<ResponseModelBase> {
   return request({
-    method: "GET",
+    method: "PUT",
     path: `/prompt-template/${templateId}/set-block-position/${blockId}/`,
     query: { position },
     schema: ResponseModelBaseSchema,

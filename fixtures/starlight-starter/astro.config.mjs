@@ -23,7 +23,7 @@ export default defineConfig({
     faPrompt({
       mode: "starter",
       apiBase: "/prompt",
-      apiPrefix: "/fastapi",
+      apiPrefix: "",
       auth: { provider: "none" }
     })
   ]

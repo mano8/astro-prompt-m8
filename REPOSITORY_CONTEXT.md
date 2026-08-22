@@ -15,8 +15,8 @@ host source edits outside documented registration points.
 
 - Communicate with `prompt-engine-m8` over HTTP only; never import service code.
 - Publish `@mano8/astro-prompt-m8` and keep `promptEngineM8` package metadata,
-  schemas, and compatibility checks aligned with `prompt-engine-m8@1.0`, tested
-  with 1.1.0 and supporting `>=1.0.0 <2.0.0`.
+  schemas, and compatibility checks aligned with `prompt-engine-m8@2.0.0`, tested
+  with service version 2.0.0 and supporting `>=2.0.0 <3.0.0`.
 - Require `@mano8/astro-auth-m8` as the official M8 auth peer. Couple only through
   `PromptAuthAdapter` / `createFaAuthAdapter`, wiring it after `faAuth`.
   `react` and `react-dom` remain optional peers so headless use works without them.

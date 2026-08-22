@@ -212,3 +212,67 @@ export function stringifyListUrlParams<
   }
   return query.toString();
 }
+
+/**
+ * The list parameters a prompt-engine list endpoint understands, in the shape
+ * the api wrappers hand to `request()`. `skip`/`limit` are always present; the
+ * rest are omitted when blank, which is how the service reads them anyway.
+ */
+export interface ServiceListQuery {
+  // Index signature so the shape is assignable to `request()`'s `query` bag.
+  [param: string]: string | number | undefined;
+  skip: number;
+  limit: number;
+  q?: string;
+  csrc?: string;
+  sort?: string;
+  order?: string;
+  f?: string;
+}
+
+/** Source shape accepted by {@link toServiceListQuery}. */
+export interface ServiceListParams {
+  skip?: number;
+  limit?: number;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  csrc?: string;
+  sort?: string;
+  order?: string;
+  f?: string;
+}
+
+/**
+ * Read a blank value as an absent one, matching the service's `blank_to_none`.
+ * An unset table control sends `sort=`/`f=` rather than omitting the parameter;
+ * dropping it here keeps a default request byte-identical to what `skip`/`limit`
+ * alone always sent.
+ */
+function blankAsAbsent(value: string | undefined): string | undefined {
+  return value !== undefined && value.trim() !== "" ? value : undefined;
+}
+
+/**
+ * Translate list params into the query the service is declared to answer.
+ *
+ * The whole declared vocabulary crosses this boundary: narrowing it to the
+ * offset pair is what made a server-driven table filter one page against
+ * itself. `page`/`pageSize` win over `skip`/`limit` when both are supplied,
+ * because a paginator owns the offset.
+ */
+export function toServiceListQuery(params: ServiceListParams): ServiceListQuery {
+  const offset =
+    params.page !== undefined && params.pageSize !== undefined
+      ? listParamsToOffset({ page: params.page, pageSize: params.pageSize })
+      : { skip: params.skip ?? 0, limit: params.limit ?? 100 };
+
+  return {
+    ...offset,
+    q: blankAsAbsent(params.q),
+    csrc: blankAsAbsent(params.csrc),
+    sort: blankAsAbsent(params.sort),
+    order: blankAsAbsent(params.order),
+    f: blankAsAbsent(params.f)
+  };
+}

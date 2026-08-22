@@ -1,8 +1,10 @@
 import { request } from "../client.js";
+import { toServiceListQuery } from "../listParams.js";
 import { unwrap, unwrapOrNull } from "./blocks.js";
 import {
   CategoriesPublicSchema,
   CategoryCreateSchema,
+  CategoryListParamsSchema,
   CategoryUpdateSchema,
   ResponseMessageSchema,
   ResponseModelBaseSchema,
@@ -17,13 +19,19 @@ import {
 
 const ModelOrMessage = ResponseModelBaseSchema.or(ResponseMessageSchema);
 
+/**
+ * List categories. The endpoint publishes `q`/`sort`/`order` and deliberately
+ * no `csrc` and no `f` — a category carries no public flag and no faceted axis
+ * — so the params schema rejects those two rather than sending a parameter the
+ * service would drop. `count` is the count of the filtered set.
+ */
 export async function listCategories(
   params: CategoryListParams = {}
 ): Promise<CategoriesPublic | null> {
   return request({
     method: "GET",
     path: "/category/",
-    query: { skip: params.skip ?? 0, limit: params.limit ?? 100 },
+    query: toServiceListQuery(CategoryListParamsSchema.parse(params)),
     // Service may return `null` when no categories exist (`Optional[CategoriesPublic]`).
     schema: CategoriesPublicSchema.nullable(),
     auth: true

@@ -1,0 +1,113 @@
+# Changelog
+
+All notable changes to `@mano8/astro-prompt-m8` are documented here.
+
+This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The major version tracks the supported `prompt-engine-m8` **API contract**, not
+just this package's own surface: a backend contract repoint is always a major.
+
+## [Unreleased]
+
+## [1.2.0] - 2026-08-21
+
+Realigns the client with `prompt-engine-m8@2.0.0`'s server-driven list contract
+and closes the compatibility, request-schema and consumer-boundary gaps the
+`astro-prompt-canonical-frontend-alignment-plan-2026-08-18` audit found under
+the previous release's green suite. **A `1.1.x` client cannot correctly drive a
+`prompt-engine-m8@2.0.0` service**: it still narrows every list call down to
+`skip`/`limit`, its `/meta` preflight is unwired, and it still sends `GET` for
+two operations the service has already removed as deprecated aliases. Upgrade
+the client together with the service.
+
+### Breaking
+
+- **`addTemplateBlock` and `setTemplateBlockPosition` now send `POST` and `PUT`
+  (`C17`).** Both previously sent `GET` for a state-mutating operation — a
+  `GET` that mutates is cacheable, prefetchable and link-followable, and the
+  client's own tests pinned the vulnerable verb inside `toMatchObject`
+  assertions rather than catching it. `prompt-engine-m8@2.0.0` deleted the
+  deprecated `GET` aliases for these two paths before this release was
+  published, so a `1.1.x` client talking to a `2.0.0` service now gets `405` on
+  every template-block reorder and attach — there is no compatibility window to
+  preserve; the fix is required, not additive.
+
+### Added
+
+- **Server-driven list contract for blocks and templates (`C7`).** The prompt
+  block and template editors now forward the full list vocabulary —
+  `q`/`csrc`/`sort`/`order`/`f` alongside `skip`/`limit` — to
+  `prompt-engine-m8`'s list endpoints instead of fetching the first 100 rows
+  and filtering/sorting/paginating them in the browser. Sortable columns are
+  pinned to the service's declared vocabulary with
+  `satisfies readonly PromptBlockSortField[]` so an unsupported sort id fails
+  at compile time rather than silently reaching the wire. `rowCount` now comes
+  from the service's **filtered** count, matching the paginator to the actual
+  result set past the previous 100-row ceiling.
+- **Paging fixture proving the page boundary (`C8`).** `serverDrivenPaging.test.tsx`
+  exercises the editors against a fixture larger than one page, asserting the
+  client-side `filteredBlocks`/`pagedBlocks`/`filteredTemplates`/
+  `pagedTemplates` substitute is gone rather than merely unused, and that a
+  second page of results is reachable and rendered.
+- **`/meta` compatibility preflight wired at runtime (`C9`).** `src/runtime/api/meta.ts`
+  is new: a `GET /meta` wrapper feeding the existing (previously dead)
+  `assertPromptEngineM8Compatibility` from `src/runtime/compatibility.ts`.
+  `PromptProvider` now runs the preflight once per session and renders
+  `state-error` / `state-unauthorized` on a contract mismatch instead of
+  silently proceeding against an incompatible service.
+- **`CategoryCreateSchema` now requires `type` (`H2`, `D-C1`).** The strict
+  client schema previously validated `{ name }` alone and looked complete while
+  omitting the one field `prompt-engine-m8`'s `CategoryCreate` has never
+  defaulted — every category create from the UI was a `422` the client-side
+  test suite could not see, because it mocked the transport rather than the
+  service's model. Resolved on the client rather than the server per `D-C1`:
+  the UI already knows whether it is filing a block or a template category, so
+  a server-chosen default would be a guess.
+- **`ping()` now requests `/ping` instead of the unmounted API-prefix root
+  (`H4`).** The server-only liveness check requested `{apiBase}{apiPrefix}/`,
+  which `prompt-engine-m8` never mounts; the dependency-free liveness route is
+  `{API_PREFIX}/ping`. The preflight's liveness check now resolves instead of
+  404ing.
+- **Contract-fidelity tests (`C6`).** `api.test.ts` and `schemas.test.ts` gained
+  the test class the fleet lacked: list query strings and request payloads
+  asserted against `prompt-engine-m8`'s own declared vocabulary and required
+  fields, not only against a hand-written mock — the shape of test that would
+  have caught `H2` and `H6` inside the previously fully-covered suite.
+- **Install-from-tarball smoke (`C10`).** `scripts/verify-tarball-install.mjs`
+  packs the plugin, installs it into a fresh standalone Astro fixture, and
+  builds — catching missing `files`, bad `exports` and registry-path errors
+  that `npm pack --dry-run` misses.
+
+### Changed
+
+- **`D-C2` — the admin-gated dashboard views widen their client-side floor
+  from `is_superuser` to the service's `require_admin` floor.** The service
+  raised `/dashboard/*` from `require_writer` to `require_admin` in `2.0.0`;
+  the client previously gated all four overview calls on
+  `admin: true, adminRole: "is_superuser"`, which was stricter than the
+  service and locked out an ADMIN-tier user the service now serves. Fail-closed
+  before this change, so not a hole — but the decision recorded in the plan now
+  reaches the client that enforces it.
+- **`apiPrefix` default corrected (`C10`).** Aligned with the path
+  `prompt-engine-m8` actually mounts rather than a guessed default, closing the
+  other half of the `H4`-shaped defect class this release fixes for `ping()`.
+- **`@mano8/astro-ui-m8` and `@mano8/astro-auth-m8` peer/dev ranges updated**
+  to `^1.4.2` and `^2.1.0` respectively, matching the published versions this
+  release was built and tested against.
+- **Contract metadata realigned**: `promptEngineM8.contract` is now
+  `"prompt-engine-m8@2.0.0"`, `testedServiceVersion` is `"2.0.0"`,
+  `serviceVersionRange` is `">=2.0.0 <3.0.0"` (`A35`/`A36`).
+
+### Fixed
+
+- Lockfile refreshed to resolve the committed `package-lock.json` drift against
+  `package.json` (`@mano8/astro-ui-m8@^1.4.0` → `^1.4.2`,
+  `@mano8/astro-auth-m8@^1.5.0` → `^2.1.0`) that made `npm ci --legacy-peer-deps`
+  fail `EUSAGE` on every CI job — install, not only the security gate, was the
+  actual blocker (`H19`, `C21`). The same refresh clears the reported advisory
+  set (`brace-expansion`, `js-yaml`, `nanoid`, `postcss`, `undici`) with no
+  `--force` and no declared-range change.
+
+## [1.1.1] and earlier
+
+Predates this changelog. See Git history for `@mano8/astro-prompt-m8` versions
+`1.1.1` and earlier.
