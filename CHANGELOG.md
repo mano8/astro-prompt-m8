@@ -8,7 +8,7 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-08-21
+## [2.0.0] - 2026-08-23
 
 Realigns the client with `prompt-engine-m8@2.0.0`'s server-driven list contract
 and closes the compatibility, request-schema and consumer-boundary gaps the
@@ -18,6 +18,17 @@ the previous release's green suite. **A `1.1.x` client cannot correctly drive a
 `skip`/`limit`, its `/meta` preflight is unwired, and it still sends `GET` for
 two operations the service has already removed as deprecated aliases. Upgrade
 the client together with the service.
+
+**Why this is a major and not a minor.** Two reasons, either sufficient on its
+own. First, the versioning rule at the head of this file: the major tracks the
+supported `prompt-engine-m8` **API contract**, and this release repoints that
+contract from `>=1.0.0 <2.0.0` to `>=2.0.0 <3.0.0` — a `2.x` service is now the
+only service this client accepts, and its `/meta` preflight renders
+`state-error` against a `1.x` one. Second, the `Breaking` section below is a
+wire-format change, not an internal one. Shipping either under a minor would
+have let a host on `^1.1.1` pick the release up through its caret range and
+break at runtime; at `2.0.0` a host must repoint deliberately, together with
+its service.
 
 ### Breaking
 
