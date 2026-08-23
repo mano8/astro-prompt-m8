@@ -11,6 +11,7 @@ export default [
       "**/coverage/**",
       "**/.astro/**",
       "**/.cache/**",
+      "**/.tmp/**",
       "**/.vite/**",
       "**/node_modules/**",
       "**/pagefind/**",
