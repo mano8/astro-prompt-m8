@@ -17,6 +17,16 @@ host source edits outside documented registration points.
 - Publish `@mano8/astro-prompt-m8` and keep `promptEngineM8` package metadata,
   schemas, and compatibility checks aligned with `prompt-engine-m8@2.0.0`, tested
   with service version 2.0.0 and supporting `>=2.0.0 <3.0.0`.
+- `scripts/verify-contract-drift.mjs` (`npm run verify:contract-drift`, a CI gate)
+  diffs that alignment against `prompt-engine-m8`'s published OpenAPI document:
+  routes and verbs, the list vocabulary in both directions, required request-body
+  fields, and published response properties. It reads
+  `contracts/prompt-engine-m8.openapi.json` — a vendored copy, so the gate runs
+  with no network and no sibling checkout — and accepts `--openapi <path|url>`
+  (plus `--write`) to check against, or refresh from, a live service. It probes
+  the built schemas in `dist/`, so `npm run build` comes first. A deliberate
+  narrowing of the published contract must be recorded in the script with its
+  reason, or the gate fails.
 - Require `@mano8/astro-auth-m8` as the official M8 auth peer. Couple only through
   `PromptAuthAdapter` / `createFaAuthAdapter`, wiring it after `faAuth`.
   `react` and `react-dom` remain optional peers so headless use works without them.
@@ -59,6 +69,7 @@ host source edits outside documented registration points.
 - `npm run typecheck`
 - `npm test`
 - `npm run test:unit`
+- `npm run verify:contract-drift`
 
 ## Standalone authority
 
