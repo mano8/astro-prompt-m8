@@ -44,6 +44,14 @@ jobs:
       - name: Fleet alignment gates
         run: npm run verify:fleet-gates
 
+      # Diffs this plugin's Zod surface and its pinned service range against
+      # prompt-engine-m8's published OpenAPI document. Runs against the vendored
+      # copy in `contracts/`, so it needs no network and no sibling checkout;
+      # point it at a live service with
+      # `npm run verify:contract-drift -- --openapi <base>/openapi.json`.
+      - name: Contract drift against prompt-engine-m8
+        run: npm run verify:contract-drift
+
       - name: Registry drift
         run: npm run verify:registry-drift
 
