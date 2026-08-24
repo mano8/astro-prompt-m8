@@ -48,13 +48,18 @@ This package targets the `prompt-engine-m8@2.0.0` API contract and was tested
 against `prompt-engine-m8` service version `2.0.0`. Supported backend service
 versions are `>=2.0.0 <3.0.0`.
 
-Compatibility helpers are exported from `@mano8/astro-prompt-m8/compatibility`.
-Pass the backend `/meta` payload (or flat version fields) straight to the assert:
+`PromptProvider` runs this preflight automatically, once per session: it calls
+the new `GET /meta` wrapper and renders `state-error` / `state-unauthorized`
+instead of proceeding against an incompatible service, so most consumers never
+call the assert directly. Compatibility helpers are exported from
+`@mano8/astro-prompt-m8/compatibility` for headless callers that own their own
+provider tree:
 
 ```ts
 import { assertPromptEngineM8Compatibility } from "@mano8/astro-prompt-m8/compatibility";
+import { getServiceMeta } from "@mano8/astro-prompt-m8/api";
 
-const meta = await fetch(`${base}/prompt/meta`).then((r) => r.json());
+const meta = await getServiceMeta();
 assertPromptEngineM8Compatibility(meta);
 ```
 
@@ -125,7 +130,18 @@ setPromptAuthAdapter(createFaAuthAdapter({ getToken, refreshToken }));
 ```ts
 import { blocks, templates } from "@mano8/astro-prompt-m8/api";
 
-const list = await blocks.list({ skip: 0, limit: 50 });
+// skip/limit still work unchanged; q/csrc/sort/order/f are additive and
+// forwarded straight to prompt-engine-m8's declared list vocabulary — an
+// unsupported value there is a 422, not a silently ignored parameter.
+const list = await blocks.list({
+  skip: 0,
+  limit: 50,
+  q: "release notes",
+  csrc: "name",
+  sort: "updated_at",
+  order: "desc",
+  f: "role,dynamic"
+});
 const composed = await templates.compose(1, [{ id: 2, content: "Be terse." }]);
 ```
 
