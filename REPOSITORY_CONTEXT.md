@@ -46,7 +46,14 @@ host source edits outside documented registration points.
   vocabulary (`q`/`csrc`/`sort`/`order`/`f`, alongside `skip`/`limit`) to
   `prompt-engine-m8` rather than narrowing to the offset pair; sortable
   columns are pinned to the service's own vocabulary so an unsupported id
-  fails at compile time. `src/runtime/api/meta.ts` wraps `GET /meta`, and
+  fails at compile time. `blocks.exportBlocks`/`templates.exportTemplates`
+  (`A-C8`) call `GET /prompt-block/export/` / `GET /prompt-template/export/`
+  with the same filter vocabulary and no `skip`/`limit` — a deliberately
+  unpaginated read of the whole filtered set — via
+  `toServiceExportQuery` in `listParams.ts`; the block/template editor skins'
+  "Export all" button uses this, not the list route, so it exports the whole
+  filtered set rather than one fetched page. `src/runtime/api/meta.ts` wraps
+  `GET /meta`, and
   `PromptProvider` runs the compatibility preflight from
   `src/runtime/compatibility.ts` once per session.
   `src/middleware.ts` and `src/lib/csp.ts` provide the middleware slot and CSP

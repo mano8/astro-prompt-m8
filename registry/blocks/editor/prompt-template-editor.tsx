@@ -16,10 +16,8 @@ import {
   usePromptTransfer,
 } from "@mano8/astro-prompt-m8/hooks";
 import {
-  buildPromptExport,
   promptExportFilename,
   promptTemplateFacets,
-  toPortableTemplate,
   type PromptBlockPublic,
   type PromptTemplateFacet,
   type PromptTemplatePublic,
@@ -134,6 +132,7 @@ export interface PromptTemplateEditorLabels {
   blockMoved: string;
   blockActionFailed: string;
   exported: (count: number) => string;
+  exportTruncated: (exported: number, total: number) => string;
   exportFailed: string;
   imported: (created: number, skipped: number) => string;
   incompatibleTitle: string;
@@ -182,8 +181,9 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   columns: "Columns",
   selected: (selected, total) => `${selected} of ${total} selected`,
   exportLabel: "Export",
-  // Server-driven table: the rows in hand are one filtered page of templates.
-  exportAllLabel: "Export page",
+  // `A-C8`: this hits GET /prompt-template/export/, an unpaginated read over
+  // the current filter, so it exports the whole filtered set of templates.
+  exportAllLabel: "Export all",
   importLabel: "Import",
   importError: "Could not import file.",
   saved: "Prompt template saved.",
@@ -195,6 +195,8 @@ const DEFAULT_LABELS: PromptTemplateEditorLabels = {
   blockMoved: "Block position updated.",
   blockActionFailed: "Could not update the template blocks.",
   exported: (count) => `Exported ${count} template(s).`,
+  exportTruncated: (exported, total) =>
+    `Exported the first ${exported} of ${total} matching templates. Narrow the filter to export the rest.`,
   exportFailed: "Could not export.",
   imported: (created, skipped) =>
     `Imported ${created} template(s), ${skipped} skipped (already exist).`,
@@ -315,7 +317,8 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
   // keeps the plain first-page list rather than borrowing the table's params.
   const blocks = usePromptBlocks();
   const { compose, composeMutation } = useComposePrompt();
-  const { exportTemplateMutation, importMutation } = usePromptTransfer();
+  const { exportTemplateMutation, exportFilteredTemplatesMutation, importMutation } =
+    usePromptTransfer();
   // `H5`: the session `GET /meta` preflight, shared with the block editor —
   // the runner is memoised, so mounting both reads `/meta` once.
   const compatibility = usePromptCompatibility();
@@ -419,13 +422,29 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
     }
   }, [exportTemplateMutation, t]);
 
-  /** Bundle the rows currently displayed — the filtered page the service returned. */
-  const exportPageTemplates = () => {
-    const pageTemplates = templates.data?.data ?? [];
-    if (pageTemplates.length === 0) return;
-    const payload = buildPromptExport({ templates: pageTemplates.map(toPortableTemplate) });
-    downloadPromptExport(payload, promptExportFilename("bundle"));
-    toastNotification.success({ title: t.exported(pageTemplates.length) });
+  /**
+   * Export every template in the current filter (`A-C8`), not the one page
+   * the table happens to be showing — `GET /prompt-template/export/` is a
+   * second, deliberately unpaginated read over the same `q`/`f`/`sort`/`order`.
+   */
+  const exportAllTemplates = async () => {
+    try {
+      const result = await exportFilteredTemplatesMutation.mutateAsync({
+        q: templateTableParams.q,
+        f: templateTableParams.f,
+        sort: templateTableParams.sort,
+        order: templateTableParams.order,
+      });
+      if (result.exportedCount === 0) return;
+      downloadPromptExport(result.payload, promptExportFilename("bundle"));
+      toastNotification.success({
+        title: result.truncated
+          ? t.exportTruncated(result.exportedCount, result.totalCount)
+          : t.exported(result.exportedCount),
+      });
+    } catch {
+      toastNotification.error({ title: t.exportFailed });
+    }
   };
 
   const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -832,8 +851,10 @@ export default function PromptTemplateEditorSkin({ labels }: PromptTemplateEdito
           <Button
             type="button"
             variant="outline"
-            disabled={(templates.data?.data.length ?? 0) === 0}
-            onClick={exportPageTemplates}
+            disabled={
+              (templates.data?.count ?? 0) === 0 || exportFilteredTemplatesMutation.isPending
+            }
+            onClick={() => void exportAllTemplates()}
           >
             <Download className="mr-2 size-4" />
             {t.exportAllLabel}

@@ -1,20 +1,41 @@
 import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import {
   exportBlockById,
+  exportFilteredBlocks,
+  exportFilteredTemplates,
   exportTemplateById,
   importPromptExport,
+  type FilteredExportResult,
   type ImportResult
 } from "../api/transfer.js";
 import { promptKeys } from "../queryKeys.js";
-import type { PromptExport } from "../schemas.js";
+import type {
+  PromptBlockListParams,
+  PromptExport,
+  PromptTemplateListParams
+} from "../schemas.js";
 
 type ExportBlockMutation = UseMutationResult<PromptExport, unknown, number>;
 type ExportTemplateMutation = UseMutationResult<PromptExport, unknown, number>;
+type ExportFilteredBlocksMutation = UseMutationResult<
+  FilteredExportResult,
+  unknown,
+  Omit<PromptBlockListParams, "skip" | "limit" | "page" | "pageSize"> | void
+>;
+type ExportFilteredTemplatesMutation = UseMutationResult<
+  FilteredExportResult,
+  unknown,
+  Omit<PromptTemplateListParams, "skip" | "limit" | "page" | "pageSize"> | void
+>;
 type ImportMutation = UseMutationResult<ImportResult, unknown, unknown>;
 
 export type UsePromptTransfer = {
   exportBlockMutation: ExportBlockMutation;
   exportTemplateMutation: ExportTemplateMutation;
+  /** True bulk export over the filtered set (`A-C8`), not one fetched page. */
+  exportFilteredBlocksMutation: ExportFilteredBlocksMutation;
+  /** True bulk export over the filtered set (`A-C8`), not one fetched page. */
+  exportFilteredTemplatesMutation: ExportFilteredTemplatesMutation;
   importMutation: ImportMutation;
 };
 
@@ -34,6 +55,14 @@ export function usePromptTransfer(): UsePromptTransfer {
     mutationFn: (templateId) => exportTemplateById(templateId)
   });
 
+  const exportFilteredBlocksMutation: ExportFilteredBlocksMutation = useMutation({
+    mutationFn: (params) => exportFilteredBlocks(params ?? {})
+  });
+
+  const exportFilteredTemplatesMutation: ExportFilteredTemplatesMutation = useMutation({
+    mutationFn: (params) => exportFilteredTemplates(params ?? {})
+  });
+
   const importMutation = useMutation<ImportResult, unknown, unknown>({
     mutationFn: (input) => importPromptExport(input),
     onSuccess: async () => {
@@ -44,5 +73,11 @@ export function usePromptTransfer(): UsePromptTransfer {
     }
   });
 
-  return { exportBlockMutation, exportTemplateMutation, importMutation };
+  return {
+    exportBlockMutation,
+    exportTemplateMutation,
+    exportFilteredBlocksMutation,
+    exportFilteredTemplatesMutation,
+    importMutation
+  };
 }

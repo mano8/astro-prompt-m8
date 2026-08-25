@@ -127,8 +127,10 @@ const REQUEST_BODIES = [
 const MODELS = {
   PromptBlockPublic: "PromptBlockPublicSchema",
   PromptBlocksPublic: "PromptBlocksPublicSchema",
+  PromptBlocksExport: "PromptBlocksExportSchema",
   PromptTemplateDict: "PromptTemplatePublicSchema",
   PromptTemplatesList: "PromptTemplatesPublicSchema",
+  PromptTemplatesExport: "PromptTemplatesExportSchema",
   TemplateBlockDict: "TemplateBlockPublicSchema",
   CategoryPublic: "CategoryPublicSchema",
   CategoriesPublic: "CategoriesPublicSchema",

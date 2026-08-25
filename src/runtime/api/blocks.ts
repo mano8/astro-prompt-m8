@@ -1,7 +1,8 @@
 import { request } from "../client.js";
-import { toServiceListQuery } from "../listParams.js";
+import { toServiceExportQuery, toServiceListQuery } from "../listParams.js";
 import {
   PromptBlockListParamsSchema,
+  PromptBlocksExportSchema,
   PromptBlocksPublicSchema,
   ResponseMessageSchema,
   ResponseModelBaseSchema,
@@ -9,6 +10,7 @@ import {
   type PromptBlockListParams,
   type PromptBlockPublic,
   type PromptBlockUpdate,
+  type PromptBlocksExport,
   type PromptBlocksPublic,
   type ResponseMessage,
   type ResponseModelBase
@@ -26,6 +28,23 @@ export async function listBlocks(params: PromptBlockListParams = {}): Promise<Pr
     path: "/prompt-block/",
     query: toServiceListQuery(PromptBlockListParamsSchema.parse(params)),
     schema: PromptBlocksPublicSchema,
+    auth: true
+  });
+}
+
+/**
+ * Export every prompt block in the filtered set (`A-C8`), not one fetched
+ * page. Carries the same filter vocabulary as {@link listBlocks} minus
+ * `skip`/`limit`/`page`/`pageSize` — the service route accepts none of those.
+ */
+export async function exportBlocks(
+  params: Omit<PromptBlockListParams, "skip" | "limit" | "page" | "pageSize"> = {}
+): Promise<PromptBlocksExport> {
+  return request({
+    method: "GET",
+    path: "/prompt-block/export/",
+    query: toServiceExportQuery(PromptBlockListParamsSchema.parse(params)),
+    schema: PromptBlocksExportSchema,
     auth: true
   });
 }

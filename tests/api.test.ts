@@ -107,6 +107,49 @@ describe("blocks API", () => {
     expect(requestMock).not.toHaveBeenCalled();
   });
 
+  it("export forwards the filter with no skip/limit at all (A-C8)", async () => {
+    requestMock.mockResolvedValueOnce({ data: [validBlock()], count: 1, truncated: false });
+    const out = await blocks.exportBlocks({
+      q: "hero",
+      csrc: "description",
+      sort: "is_dynamic",
+      order: "desc",
+      f: "role,dynamic"
+    });
+    expect(out.count).toBe(1);
+    expect(out.truncated).toBe(false);
+    expect(lastOptions()).toMatchObject({
+      method: "GET",
+      path: "/prompt-block/export/",
+      auth: true
+    });
+    expect(lastOptions().query).toEqual({
+      q: "hero",
+      csrc: "description",
+      sort: "is_dynamic",
+      order: "desc",
+      f: "role,dynamic"
+    });
+  });
+
+  it("export sends no query at all with no params", async () => {
+    requestMock.mockResolvedValueOnce({ data: [], count: 0, truncated: false });
+    await blocks.exportBlocks();
+    expect(lastOptions().query).toEqual({
+      q: undefined,
+      csrc: undefined,
+      sort: undefined,
+      order: undefined,
+      f: undefined
+    });
+  });
+
+  it("export refuses an undeclared value before it becomes a service 422", async () => {
+    await expect(blocks.exportBlocks({ sort: "dynamic" as "name" })).rejects.toThrow();
+    await expect(blocks.exportBlocks({ f: "unknown" })).rejects.toThrow();
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
   it("getBlock returns the data shape when success", async () => {
     requestMock.mockResolvedValueOnce({ success: true, data: validBlock() });
     expect((await blocks.getBlock(7)).id).toBe(1);
@@ -195,6 +238,30 @@ describe("templates API", () => {
 
   it("list refuses a facet the template endpoint does not declare", async () => {
     await expect(templates.listTemplates({ f: "dynamic" })).rejects.toThrow();
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("export forwards the filter with no skip/limit at all (A-C8)", async () => {
+    requestMock.mockResolvedValueOnce({ data: [validTemplate()], count: 1, truncated: false });
+    const out = await templates.exportTemplates({ f: "public", sort: "block_count" });
+    expect(out.count).toBe(1);
+    expect(out.truncated).toBe(false);
+    expect(lastOptions()).toMatchObject({
+      method: "GET",
+      path: "/prompt-template/export/",
+      auth: true
+    });
+    expect(lastOptions().query).toEqual({
+      q: undefined,
+      csrc: undefined,
+      sort: "block_count",
+      order: undefined,
+      f: "public"
+    });
+  });
+
+  it("export refuses a facet the template endpoint does not declare", async () => {
+    await expect(templates.exportTemplates({ f: "dynamic" })).rejects.toThrow();
     expect(requestMock).not.toHaveBeenCalled();
   });
 
@@ -548,11 +615,15 @@ describe("api index", () => {
     await index.admin.overview();
     expect(requestMock).toHaveBeenCalled();
     expect(index.blocks.create).toBe(blocks.createBlock);
+    expect(index.blocks.export).toBe(blocks.exportBlocks);
     expect(index.templates.compose).toBe(templates.composeTemplate);
+    expect(index.templates.export).toBe(templates.exportTemplates);
     expect(index.categories.delete).toBe(categories.deleteCategory);
     expect(index.dashboard.activityCurrent).toBe(dashboard.getActivityCurrent);
     expect(index.meta.get).toBe(meta.getServiceMeta);
     expect(index.meta.preflight).toBe(meta.runPromptEngineM8Preflight);
     expect(index.meta.resetPreflight).toBe(meta.resetPromptEngineM8Preflight);
+    expect(index.transfer.exportFilteredBlocks).toBe(index.exportFilteredBlocks);
+    expect(index.transfer.exportFilteredTemplates).toBe(index.exportFilteredTemplates);
   });
 });

@@ -113,4 +113,29 @@ describe("gallery service stub", () => {
     const response = await fetch("/prompt-api/not-a-real-route/");
     expect(response.status).toBe(404);
   });
+
+  it("answers /export/ with the whole filtered set and no skip/limit (A-C8)", async () => {
+    const read = async (path: string, query: string) => {
+      const response = await fetch(`/prompt-api${path}?${query}`);
+      return (await response.json()) as {
+        data: { name: string }[];
+        count: number;
+        truncated: boolean;
+      };
+    };
+
+    const list = await read("/prompt-block/", "f=role&skip=0&limit=10");
+    const exported = await read("/prompt-block/export/", "f=role");
+
+    // The list route pages; the export route doesn't — same filtered count,
+    // but every matching row rather than one page of them.
+    expect(exported.count).toBe(list.count);
+    expect(exported.data).toHaveLength(list.count);
+    expect(exported.data.every((row) => row.name.startsWith("role"))).toBe(true);
+    expect(exported.truncated).toBe(false);
+
+    const templatesExported = await read("/prompt-template/export/", "");
+    expect(templatesExported.truncated).toBe(false);
+    expect(templatesExported.data.length).toBe(templatesExported.count);
+  });
 });

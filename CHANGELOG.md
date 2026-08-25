@@ -44,6 +44,19 @@ its service.
 
 ### Added
 
+- **True bulk export over the filtered set (`A-C8`).** The block and template
+  editors' "Export all" button now calls `GET /prompt-block/export/` /
+  `GET /prompt-template/export/` — a second, deliberately unpaginated read
+  carrying the same `q`/`csrc`/`sort`/`order`/`f` filter as the list route —
+  instead of bundling only the one page the table happened to be showing
+  (`C7`'s interim fix, which relabelled the button "Export page" rather than
+  claim more than it did). `exportFilteredBlocks`/`exportFilteredTemplates` in
+  `runtime/api/transfer.ts`, wired through `usePromptTransfer`'s
+  `exportFilteredBlocksMutation`/`exportFilteredTemplatesMutation`.
+  `toServiceExportQuery` in `listParams.ts` is `toServiceListQuery` without the
+  offset pair, since the export routes accept none of it. A response past the
+  service's `MAX_EXPORT_SIZE` cap sets `truncated: true`, surfaced as a toast
+  naming the exported/total counts rather than silently dropping rows.
 - **Server-driven list contract for blocks and templates (`C7`).** The prompt
   block and template editors now forward the full list vocabulary —
   `q`/`csrc`/`sort`/`order`/`f` alongside `skip`/`limit` — to

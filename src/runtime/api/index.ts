@@ -18,6 +18,7 @@ export * from "./meta.js";
 // Grouped namespaces (`blocks.list`, `templates.compose`, ...).
 export const blocks = {
   list: blocksApi.listBlocks,
+  export: blocksApi.exportBlocks,
   get: blocksApi.getBlock,
   getBySlug: blocksApi.getBlockBySlug,
   create: blocksApi.createBlock,
@@ -27,6 +28,7 @@ export const blocks = {
 
 export const templates = {
   list: templatesApi.listTemplates,
+  export: templatesApi.exportTemplates,
   get: templatesApi.getTemplate,
   getBySlug: templatesApi.getTemplateBySlug,
   getBlocks: templatesApi.getTemplateBlocks,
@@ -59,6 +61,8 @@ export const admin = {
 export const transfer = {
   exportBlock: transferApi.exportBlockById,
   exportTemplate: transferApi.exportTemplateById,
+  exportFilteredBlocks: transferApi.exportFilteredBlocks,
+  exportFilteredTemplates: transferApi.exportFilteredTemplates,
   import: transferApi.importPromptExport
 } as const;
 

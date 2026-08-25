@@ -231,6 +231,29 @@ export function installServiceStub(): typeof globalThis.fetch {
       return json(created, 201);
     }
 
+    // `A-C8`: the export routes carry the same filter vocabulary as the list
+    // routes but no `skip`/`limit`, and publish `truncated` on the response —
+    // checked before the plain list branches below, which `.includes()` would
+    // otherwise also match. The fixture's rows are always far under
+    // `MAX_EXPORT_SIZE`, so `truncated` is always `false` here.
+    if (path.endsWith("/prompt-block/export/") && method === "GET") {
+      const page = paginate(
+        ALL_BLOCKS as unknown as Record<string, unknown>[],
+        params,
+        SEARCHABLE.block
+      );
+      return json({ ...page, truncated: false });
+    }
+
+    if (path.endsWith("/prompt-template/export/") && method === "GET") {
+      const page = paginate(
+        ALL_TEMPLATES as unknown as Record<string, unknown>[],
+        params,
+        SEARCHABLE.template
+      );
+      return json({ ...page, truncated: false });
+    }
+
     if (path.includes("/prompt-block/") && method === "GET") {
       const page = paginate(
         ALL_BLOCKS as unknown as Record<string, unknown>[],

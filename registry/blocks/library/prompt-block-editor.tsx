@@ -14,12 +14,10 @@ import {
   usePromptTransfer,
 } from "@mano8/astro-prompt-m8/hooks";
 import {
-  buildPromptExport,
   hasDynamicContentPlaceholder,
   insertDynamicContentPlaceholder,
   promptBlockFacets,
   promptExportFilename,
-  toPortableBlock,
   type PromptBlockFacet,
   type PromptBlockPublic,
   type PromptBlockSortField,
@@ -114,6 +112,7 @@ export interface PromptBlockEditorLabels {
   deleted: string;
   deleteFailed: string;
   exported: (count: number) => string;
+  exportTruncated: (exported: number, total: number) => string;
   exportFailed: string;
   imported: (created: number, reused: number) => string;
   incompatibleTitle: string;
@@ -149,9 +148,10 @@ const DEFAULT_LABELS: PromptBlockEditorLabels = {
   columns: "Columns",
   selected: (selected, total) => `${selected} of ${total} selected`,
   exportLabel: "Export",
-  // The table is server-driven, so the rows in hand are one filtered page, not
-  // the whole library. The label says page because the button exports a page.
-  exportAllLabel: "Export page",
+  // `A-C8`: this hits GET /prompt-block/export/, an unpaginated read over the
+  // current filter, so it exports the whole filtered set rather than the one
+  // page the table is showing.
+  exportAllLabel: "Export all",
   importLabel: "Import",
   importError: "Could not import file.",
   saved: "Prompt block saved.",
@@ -159,6 +159,8 @@ const DEFAULT_LABELS: PromptBlockEditorLabels = {
   deleted: "Prompt block deleted.",
   deleteFailed: "Could not delete the prompt block.",
   exported: (count) => `Exported ${count} block(s).`,
+  exportTruncated: (exported, total) =>
+    `Exported the first ${exported} of ${total} matching blocks. Narrow the filter to export the rest.`,
   exportFailed: "Could not export.",
   imported: (created, reused) => `Imported ${created} new, ${reused} reused.`,
   incompatibleTitle: "Prompt service unavailable",
@@ -245,7 +247,8 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
   // and the row count are the service's answer to them.
   const { data, loading, error, createMutation, updateMutation, deleteMutation, refresh } =
     usePromptBlocks(tableParams);
-  const { exportBlockMutation, importMutation } = usePromptTransfer();
+  const { exportBlockMutation, exportFilteredBlocksMutation, importMutation } =
+    usePromptTransfer();
   // `H5`: the session `GET /meta` preflight. A host pointed at the wrong M8
   // service gets the shared error state, not four failing requests.
   const compatibility = usePromptCompatibility();
@@ -316,13 +319,29 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
     }
   }, [exportBlockMutation, t]);
 
-  /** Bundle the rows currently displayed — the filtered page the service returned. */
-  const exportPageBlocks = () => {
-    const pageBlocks = data?.data ?? [];
-    if (pageBlocks.length === 0) return;
-    const payload = buildPromptExport({ blocks: pageBlocks.map(toPortableBlock) });
-    downloadPromptExport(payload, promptExportFilename("bundle"));
-    toastNotification.success({ title: t.exported(pageBlocks.length) });
+  /**
+   * Export every block in the current filter (`A-C8`), not the one page the
+   * table happens to be showing — `GET /prompt-block/export/` is a second,
+   * deliberately unpaginated read over the same `q`/`f`/`sort`/`order`.
+   */
+  const exportAllBlocks = async () => {
+    try {
+      const result = await exportFilteredBlocksMutation.mutateAsync({
+        q: tableParams.q,
+        f: tableParams.f,
+        sort: tableParams.sort,
+        order: tableParams.order,
+      });
+      if (result.exportedCount === 0) return;
+      downloadPromptExport(result.payload, promptExportFilename("bundle"));
+      toastNotification.success({
+        title: result.truncated
+          ? t.exportTruncated(result.exportedCount, result.totalCount)
+          : t.exported(result.exportedCount),
+      });
+    } catch {
+      toastNotification.error({ title: t.exportFailed });
+    }
   };
 
   const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -507,8 +526,8 @@ export default function PromptBlockEditor({ labels }: PromptBlockEditorProps) {
           <Button
             type="button"
             variant="outline"
-            disabled={(data?.data.length ?? 0) === 0}
-            onClick={exportPageBlocks}
+            disabled={(data?.count ?? 0) === 0 || exportFilteredBlocksMutation.isPending}
+            onClick={() => void exportAllBlocks()}
           >
             <Download className="mr-2 size-4" />
             {t.exportAllLabel}

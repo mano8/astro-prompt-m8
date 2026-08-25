@@ -38,6 +38,7 @@ vi.mock("../src/runtime/api/blocks.js", async (importOriginal) => ({
 
 vi.mock("../src/runtime/api/templates.js", () => ({
   listTemplates: listTemplatesMock,
+  exportTemplates: vi.fn(),
   createTemplate: vi.fn(),
   updateTemplate: vi.fn(),
   deleteTemplate: vi.fn(),

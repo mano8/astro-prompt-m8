@@ -3,21 +3,31 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getBlock = vi.hoisted(() => vi.fn());
 const createBlock = vi.hoisted(() => vi.fn());
 const getBlockBySlug = vi.hoisted(() => vi.fn());
+const exportBlocks = vi.hoisted(() => vi.fn());
 const getTemplate = vi.hoisted(() => vi.fn());
 const createTemplate = vi.hoisted(() => vi.fn());
 const getTemplateBySlug = vi.hoisted(() => vi.fn());
 const addTemplateBlock = vi.hoisted(() => vi.fn());
+const exportTemplates = vi.hoisted(() => vi.fn());
 
-vi.mock("../src/runtime/api/blocks.js", () => ({ getBlock, createBlock, getBlockBySlug }));
+vi.mock("../src/runtime/api/blocks.js", () => ({
+  getBlock,
+  createBlock,
+  getBlockBySlug,
+  exportBlocks
+}));
 vi.mock("../src/runtime/api/templates.js", () => ({
   getTemplate,
   createTemplate,
   getTemplateBySlug,
-  addTemplateBlock
+  addTemplateBlock,
+  exportTemplates
 }));
 
 import {
   exportBlockById,
+  exportFilteredBlocks,
+  exportFilteredTemplates,
   exportTemplateById,
   importPromptExport
 } from "../src/runtime/api/transfer.js";
@@ -93,6 +103,55 @@ describe("export", () => {
     expect(getTemplate).toHaveBeenCalledWith(9);
     expect(out.templates[0].blocks[0].block.slug).toBe("b");
     expect(out.templates[0].blocks[0].block).not.toHaveProperty("template_id");
+  });
+});
+
+describe("filtered bulk export (A-C8)", () => {
+  it("exports the whole filtered set, not one page, and carries the filter through", async () => {
+    exportBlocks.mockResolvedValueOnce({
+      data: [publicBlock({ id: 1, slug: "a" }), publicBlock({ id: 2, slug: "b" })],
+      count: 2,
+      truncated: false
+    });
+
+    const out = await exportFilteredBlocks({ q: "alpha", f: "public" });
+
+    expect(exportBlocks).toHaveBeenCalledWith({ q: "alpha", f: "public" });
+    expect(out.exportedCount).toBe(2);
+    expect(out.totalCount).toBe(2);
+    expect(out.truncated).toBe(false);
+    expect(out.payload.blocks.map((block) => block.slug)).toEqual(["a", "b"]);
+    expect(out.payload.blocks[0]).not.toHaveProperty("owner_id");
+  });
+
+  it("surfaces truncation when the filtered set exceeds the service's export cap", async () => {
+    exportBlocks.mockResolvedValueOnce({
+      data: [publicBlock({ id: 1, slug: "a" })],
+      count: 5000,
+      truncated: true
+    });
+
+    const out = await exportFilteredBlocks();
+
+    expect(out.exportedCount).toBe(1);
+    expect(out.totalCount).toBe(5000);
+    expect(out.truncated).toBe(true);
+  });
+
+  it("exports every template in the filtered set with blocks embedded", async () => {
+    exportTemplates.mockResolvedValueOnce({
+      data: [publicTemplate({ blocks: [templateBlock()] })],
+      count: 1,
+      truncated: false
+    });
+
+    const out = await exportFilteredTemplates({ f: "private" });
+
+    expect(exportTemplates).toHaveBeenCalledWith({ f: "private" });
+    expect(out.exportedCount).toBe(1);
+    expect(out.totalCount).toBe(1);
+    expect(out.truncated).toBe(false);
+    expect(out.payload.templates[0].blocks[0].block.slug).toBe("b");
   });
 });
 

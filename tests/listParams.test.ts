@@ -5,6 +5,7 @@ import {
   mergeAndNormalize,
   parseListUrlParams,
   stringifyListUrlParams,
+  toServiceExportQuery,
   toServiceListQuery
 } from "../src/runtime/listParams.js";
 
@@ -257,5 +258,54 @@ describe("toServiceListQuery", () => {
       skip: 7,
       limit: 3
     });
+  });
+});
+
+describe("toServiceExportQuery", () => {
+  it("carries the filter vocabulary with no skip/limit at all (A-C8)", () => {
+    // An export route accepts none of the offset pair, so unlike
+    // `toServiceListQuery` there is nothing to default — the query it builds
+    // must not carry `skip`/`limit` keys even implicitly.
+    const query = toServiceExportQuery({
+      q: "hero",
+      csrc: "name",
+      sort: "created_at",
+      order: "desc",
+      f: "role,dynamic"
+    });
+    expect(query).toEqual({
+      q: "hero",
+      csrc: "name",
+      sort: "created_at",
+      order: "desc",
+      f: "role,dynamic"
+    });
+    expect(query).not.toHaveProperty("skip");
+    expect(query).not.toHaveProperty("limit");
+  });
+
+  it("reads a blank parameter as an absent one, like the service does", () => {
+    expect(toServiceExportQuery({ q: "", csrc: "", sort: "", order: "", f: "  " })).toEqual({
+      q: undefined,
+      csrc: undefined,
+      sort: undefined,
+      order: undefined,
+      f: undefined
+    });
+  });
+
+  it("ignores any paging fields a caller passes anyway", () => {
+    // The type omits them, but a plain-object caller (or one that spreads a
+    // list-params object) could still pass skip/limit/page/pageSize through;
+    // the export query must not forward them.
+    const query = toServiceExportQuery({
+      q: "x",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- exercising a caller that ignores the Omit<> type
+      ...({ skip: 5, limit: 10, page: 2, pageSize: 20 } as any)
+    });
+    expect(query).not.toHaveProperty("skip");
+    expect(query).not.toHaveProperty("limit");
+    expect(query).not.toHaveProperty("page");
+    expect(query).not.toHaveProperty("pageSize");
   });
 });
