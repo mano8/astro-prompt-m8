@@ -8,6 +8,18 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ## [Unreleased]
 
+### Changed
+
+- **The required auth peer is raised to `@mano8/astro-auth-m8` `^2.3.0`** in
+  both `peerDependencies` and `devDependencies`. `2.3.0` coordinates the two
+  token-refresh paths behind one single-flight guard; below it, a page mounting
+  both paths against one expired token can issue two rotations, which
+  `fa-auth-m8` reads as token reuse and answers by revoking every session for
+  the account. This plugin reaches that path through
+  `installFaAuthBrowserAdapter`, so it is behaviour this package depends on
+  rather than one it merely tolerates. The previous range already resolved
+  `2.3.0` on a fresh install; the floor states the requirement.
+
 ## [2.0.0] - 2026-08-23
 
 Realigns the client with `prompt-engine-m8@2.0.0`'s server-driven list contract
