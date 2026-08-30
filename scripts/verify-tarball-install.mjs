@@ -23,7 +23,18 @@ const NPM_CACHE_DIR = join(ROOT, ".tmp", "npm-cache");
 
 // Spawned through node rather than an `npm`/`npm.cmd` shim so the script runs
 // the same way on Windows and CI Linux, with no shell interpolation.
-const NPM_CLI = join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+//
+// Where npm sits relative to the node binary is not the same on both, which is
+// what this list is for. npm sets `npm_execpath` when it invokes a run-script,
+// so it is right wherever npm actually lives; the fallbacks cover a direct
+// `node scripts/...` run, where npm is beside the binary on Windows but under
+// `../lib` on POSIX — the layout the CI toolcache uses.
+const NPM_CLI_CANDIDATES = [
+  process.env.npm_execpath,
+  join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+  join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")
+].filter((candidate) => typeof candidate === "string" && candidate.endsWith(".js"));
+const NPM_CLI = NPM_CLI_CANDIDATES.find((candidate) => existsSync(candidate)) ?? "";
 
 /** Every subpath `package.json` publishes must resolve from the install. */
 const EXPECTED_EXPORT_SUBPATHS = [
@@ -202,7 +213,10 @@ function verifyConsumerRuns() {
 
 function main() {
   assertExists(FIXTURE_DIR, "tarball consumer fixture");
-  assertExists(NPM_CLI, "npm cli");
+  assert(
+    NPM_CLI !== "",
+    `no npm cli found. Looked in:\n  ${NPM_CLI_CANDIDATES.join("\n  ")}`
+  );
 
   rmSync(TMP_DIR, { recursive: true, force: true });
   mkdirSync(WORK_DIR, { recursive: true });
