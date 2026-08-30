@@ -1,3 +1,5 @@
+import { hasMinimumRole, ORDERED_ROLES } from "@mano8/astro-auth-m8/authorization";
+
 import { getPromptConfig } from "./config.js";
 
 /**
@@ -23,27 +25,46 @@ export type InMemoryAuthAdapter = PromptAuthAdapter & {
 };
 
 /**
- * The M8 role vocabulary, highest privilege first — a mirror of
- * `auth_sdk_m8.schemas.base.RoleType.get_ordered_roles()`, by value rather than
- * by import, since the prompt plugin never depends on a service package.
+ * The M8 role vocabulary, highest privilege first — the fleet's one list.
+ *
+ * This was a *copy* of `auth_sdk_m8.schemas.base.RoleType.get_ordered_roles()`
+ * until 2026-08-29, written by value rather than by import because the fleet's
+ * `no-cross-plugin-import` gate (`C12`, `scripts/verify-fleet-gates.mjs`)
+ * refused the import. Decision 4 of the reparto remediation plan widened that
+ * gate for exactly one specifier — `@mano8/astro-auth-m8/authorization`, the
+ * pure, framework-neutral mirror of the SDK module — so the copy is gone and
+ * `RBAC-06`, one role hierarchy across the fleet, is met by an import.
+ *
+ * The exemption is narrow on purpose: every other subpath of the auth peer is
+ * still refused, and this package already requires `@mano8/astro-auth-m8` as a
+ * peer dependency, so the import adds no install a consumer did not already
+ * owe. What the plugin still refuses to import statically is the auth peer's
+ * *runtime* — tokens, refresh, React — which is why {@link createFaAuthAdapter}
+ * below takes injected bindings rather than importing them.
+ *
+ * Re-exported under the name this module already published, so the package
+ * surface is unchanged and no caller moves.
  */
-export const PROMPT_ROLE_ORDER = [
-  "superadmin",
-  "admin",
-  "writer",
-  "reader",
-  "user"
-] as const;
+export const PROMPT_ROLE_ORDER = ORDERED_ROLES;
 export type PromptRole = (typeof PROMPT_ROLE_ORDER)[number];
 
 function isPromptRole(value: string): value is PromptRole {
   return (PROMPT_ROLE_ORDER as readonly string[]).includes(value);
 }
 
-/** True when `role` sits at or above `floor` in the ordered vocabulary. */
+/**
+ * True when `role` sits at or above `floor` in the ordered vocabulary.
+ *
+ * The string-shaped seam over the peer's `hasMinimumRole`, which is typed to
+ * the role union. Claims reaching this plugin come from a backend that may be
+ * newer than the client and from host-configured `adminRole` strings, so both
+ * arguments arrive as plain strings; an unrecognised one is not on the truth
+ * table and answers `false` rather than being guessed at. The ordering itself
+ * is the peer's, not a second implementation of it.
+ */
 export function hasMinimumPromptRole(role: string, floor: string): boolean {
   if (!isPromptRole(role) || !isPromptRole(floor)) return false;
-  return PROMPT_ROLE_ORDER.indexOf(role) <= PROMPT_ROLE_ORDER.indexOf(floor);
+  return hasMinimumRole(role, floor);
 }
 
 /**
@@ -102,8 +123,10 @@ export type FaAuthBindings = {
 
 /**
  * Build the official adapter from `@mano8/astro-auth-m8` bindings. The bindings
- * are injected by the consumer so the prompt plugin keeps the auth plugin as an
- * optional peer and never statically imports it.
+ * are injected by the consumer so the prompt plugin never statically imports the
+ * auth peer's *runtime* — its token store, its refresh path or its React layer.
+ * The one specifier it does import is `./authorization`, which holds no state
+ * and reaches no browser global (see {@link PROMPT_ROLE_ORDER}).
  */
 export function createFaAuthAdapter(bindings: FaAuthBindings): PromptAuthAdapter {
   return {

@@ -1,3 +1,4 @@
+import { ORDERED_ROLES } from "@mano8/astro-auth-m8/authorization";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { promptUrl, request } from "../src/runtime/client.js";
@@ -127,6 +128,13 @@ describe("auth adapter", () => {
     expect(defaultIsSuperuser({ roles: ["is_superuser"] }, "is_superuser")).toBe(true);
     expect(defaultIsSuperuser({ role: "ops-lead" }, "ops-lead")).toBe(true);
     expect(defaultIsSuperuser({ role: "superadmin" }, "ops-lead")).toBe(false);
+  });
+
+  it("states the hierarchy once: PROMPT_ROLE_ORDER is the auth peer's own list", () => {
+    // `RBAC-06` — one role hierarchy across the fleet. Asserted by *identity*,
+    // not by value: a re-forked copy with the same five strings would pass a
+    // value comparison on the day it landed and drift silently afterwards.
+    expect(PROMPT_ROLE_ORDER).toBe(ORDERED_ROLES);
   });
 
   it("orders roles the way auth-sdk-m8 does", () => {

@@ -8,6 +8,17 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-29
+
+Documentation and dependency-floor release. No behaviour, no wire format and no
+published API surface changes; `2.0.0` consumers upgrade by installing it.
+
+It exists because two changes landed on `2.0.0` after it was published and
+neither is a release of its own: the auth peer floor moved with the fleet, and
+the role hierarchy this package used to restate is now imported. `C22`'s
+changelog/version parity gate is what requires them to be released rather than
+left in `[Unreleased]` on an already-published number.
+
 ### Changed
 
 - **The fleet gate exempts one authorization specifier** (remediation `W7.7`,
@@ -20,20 +31,46 @@ just this package's own surface: a backend contract repoint is always a major.
   subpath of the auth peer stays refused. A new `authorization-purity` gate
   makes that exemption conditional: in a package that uses it, it walks the
   module's import closure and fails on React, on any bare dependency other than
-  `zod`, or on any read of a runtime global. This package imports no
-  authorization module today, so the second gate is inert here and nothing in
-  its behaviour, surface or dependencies changes; it carries the rule so the
-  fleet stays one rule.
+  `zod`, or on any read of a runtime global. It is no longer inert here: this
+  package now imports that module (below), so the purity of the fleet's one
+  hierarchy is verified on every build of this repository too.
 
-- **The required auth peer is raised to `@mano8/astro-auth-m8` `^2.3.0`** in
-  both `peerDependencies` and `devDependencies`. `2.3.0` coordinates the two
-  token-refresh paths behind one single-flight guard; below it, a page mounting
-  both paths against one expired token can issue two rotations, which
-  `fa-auth-m8` reads as token reuse and answers by revoking every session for
-  the account. This plugin reaches that path through
-  `installFaAuthBrowserAdapter`, so it is behaviour this package depends on
-  rather than one it merely tolerates. The previous range already resolved
-  `2.3.0` on a fresh install; the floor states the requirement.
+- **The required auth peer is raised to `@mano8/astro-auth-m8` `^2.4.0`** in
+  both `peerDependencies` and `devDependencies`. Two reasons stack and the floor
+  is the higher. `2.3.0` coordinates the two token-refresh paths behind one
+  single-flight guard; below it, a page mounting both paths against one expired
+  token can issue two rotations, which `fa-auth-m8` reads as token reuse and
+  answers by revoking every session for the account. This plugin reaches that
+  path through `installFaAuthBrowserAdapter`, so it is behaviour this package
+  depends on rather than one it merely tolerates. `2.4.0` is then the release in
+  which `@mano8/astro-auth-m8/authorization` becomes a **supported** import
+  surface rather than an internal module this package happens to be able to
+  reach — which the very next entry makes load-bearing, since `authAdapter.ts`
+  now imports its hierarchy from exactly that specifier. Below `2.4.0` this
+  package would be depending on a promise the peer had not yet made. The
+  previous range already resolved these on a fresh install; the floor states the
+  requirement.
+
+- **This package no longer states the role hierarchy itself** (remediation
+  `W7.7`'s named follow-up, decision 4). `src/runtime/authAdapter.ts` held a
+  third copy of the M8 role vocabulary — `PROMPT_ROLE_ORDER` written out by
+  value, and a `hasMinimumPromptRole` that compared indices into it — pinned by
+  no agreement test at all, where `astro-reparto-m8`'s copy at least had one.
+  Both now come from `@mano8/astro-auth-m8/authorization`, the one specifier
+  the widened `C12` gate permits: `PROMPT_ROLE_ORDER` **is** the peer's
+  `ORDERED_ROLES`, and `hasMinimumPromptRole` is a string-shaped seam over its
+  `hasMinimumRole` — it keeps taking plain strings, because the claims reaching
+  this plugin come from a backend that may be newer than the client and from a
+  host-configured `adminRole`, and an unrecognised role still answers `false`.
+  **Nothing in the published surface moves**: both names, both signatures and
+  every answer they give are what `2.0.0` shipped, and `tests/runtime.test.ts`
+  keeps the behavioural cases and adds one asserting by *identity* that
+  `PROMPT_ROLE_ORDER` is the peer's list, so a re-fork fails the day it lands
+  rather than drifting quietly. The auth peer is already a required
+  `peerDependency`, so the import adds no install a consumer did not owe; the
+  peer's *runtime* — its token store, refresh path and React layer — is still
+  never statically imported, which is why `createFaAuthAdapter` still takes
+  injected bindings.
 
 ## [2.0.0] - 2026-08-23
 
