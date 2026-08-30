@@ -258,49 +258,75 @@ function sample(document, node, mode, depth = 0) {
   // the branch, not from the parameter.
   const schema = deref(document, pickBranch(deref(document, node, depth)), depth);
 
+  const pinned = pinnedValue(schema);
+  if (pinned !== undefined) return pinned;
+
+  const type = namedType(schema);
+  const scalar = SCALAR_SAMPLERS.get(type);
+  if (scalar) return scalar(schema);
+  if (type === "array") return [sample(document, schema.items ?? {}, mode, depth + 1)];
+  return sampleObject(document, schema, mode, depth, type);
+}
+
+/**
+ * The single value the document pins, if it pins one, and `undefined` if the
+ * value is still free to be sampled.
+ *
+ * `default` is deliberately not read here. `q` and `f` both default to the
+ * empty string, and a blank is what the service reads as *absent* — sampling
+ * the default would probe the one value that proves nothing.
+ */
+function pinnedValue(schema) {
   if (Array.isArray(schema.enum) && schema.enum.length > 0) return schema.enum[0];
   if (schema.const !== undefined) return schema.const;
-  // `default` is deliberately not a shortcut. `q` and `f` both default to the
-  // empty string, and a blank is what the service reads as *absent* — sampling
-  // the default would probe the one value that proves nothing.
-
-  const type = Array.isArray(schema.type) ? schema.type.find((one) => one !== "null") : schema.type;
-
-  switch (type) {
-    case "string": {
-      if (schema.format === "date-time") return "2026-01-01T00:00:00Z";
-      if (schema.format === "uuid") return "00000000-0000-4000-8000-000000000000";
-      const min = Math.max(schema.minLength ?? 1, 1);
-      const max = schema.maxLength ?? min;
-      return "x".repeat(Math.max(1, Math.min(min, max)));
-    }
-    case "integer":
-    case "number": {
-      const exclusive = schema.exclusiveMinimum;
-      const floor = exclusive !== undefined ? Number(exclusive) + 1 : (schema.minimum ?? 1);
-      const ceiling = schema.maximum ?? floor;
-      return Math.min(floor, ceiling);
-    }
-    case "boolean":
-      return true;
-    case "array":
-      return [sample(document, schema.items ?? {}, mode, depth + 1)];
-    case "null":
-      return null;
-    case "object":
-    default: {
-      const properties = schema.properties;
-      if (!properties) return type === "object" ? {} : "x";
-      const required = new Set(schema.required ?? []);
-      const result = {};
-      for (const [name, property] of Object.entries(properties)) {
-        if (mode === "required" && !required.has(name)) continue;
-        result[name] = sample(document, property, mode, depth + 1);
-      }
-      return result;
-    }
-  }
+  return undefined;
 }
+
+/** The non-`null` half of a type published as a union, else the type itself. */
+function namedType(schema) {
+  return Array.isArray(schema.type) ? schema.type.find((one) => one !== "null") : schema.type;
+}
+
+function sampleString(schema) {
+  if (schema.format === "date-time") return "2026-01-01T00:00:00Z";
+  if (schema.format === "uuid") return "00000000-0000-4000-8000-000000000000";
+  const min = Math.max(schema.minLength ?? 1, 1);
+  const max = schema.maxLength ?? min;
+  return "x".repeat(Math.max(1, Math.min(min, max)));
+}
+
+function sampleNumber(schema) {
+  const exclusive = schema.exclusiveMinimum;
+  const floor = exclusive !== undefined ? Number(exclusive) + 1 : (schema.minimum ?? 1);
+  const ceiling = schema.maximum ?? floor;
+  return Math.min(floor, ceiling);
+}
+
+/**
+ * The object case, and the fallback for a schema that publishes no type at all:
+ * a typeless schema with properties is still an object, and one without them is
+ * a free-form value that a string satisfies.
+ */
+function sampleObject(document, schema, mode, depth, type) {
+  const properties = schema.properties;
+  if (!properties) return type === "object" ? {} : "x";
+  const required = new Set(schema.required ?? []);
+  const result = {};
+  for (const [name, property] of Object.entries(properties)) {
+    if (mode === "required" && !required.has(name)) continue;
+    result[name] = sample(document, property, mode, depth + 1);
+  }
+  return result;
+}
+
+/** A `Map`, not an object literal, so a published type never reaches a prototype key. */
+const SCALAR_SAMPLERS = new Map([
+  ["string", sampleString],
+  ["integer", sampleNumber],
+  ["number", sampleNumber],
+  ["boolean", () => true],
+  ["null", () => null],
+]);
 
 // ---------------------------------------------------------------------------
 // Document helpers
@@ -311,14 +337,23 @@ function pathShape(path) {
   return path.replace(/\{[^}]*\}/g, "{}");
 }
 
-function buildPathIndex(document) {
-  const index = new Map();
+/**
+ * The one leading segment every published path shares — `/api` in
+ * `/api/prompt-block/` — or `""` when they do not agree on one. Routes are
+ * indexed without it, since the client carries it in its base url instead.
+ */
+function commonPathPrefix(document) {
   let prefix = null;
   for (const path of Object.keys(document.paths ?? {})) {
     const segments = path.split("/");
     prefix = prefix === null ? segments[1] : prefix === segments[1] ? prefix : "";
   }
-  const apiPrefix = prefix ? `/${prefix}` : "";
+  return prefix ? `/${prefix}` : "";
+}
+
+function buildPathIndex(document) {
+  const index = new Map();
+  const apiPrefix = commonPathPrefix(document);
   for (const [path, operations] of Object.entries(document.paths ?? {})) {
     const relative = apiPrefix && path.startsWith(apiPrefix) ? path.slice(apiPrefix.length) : path;
     index.set(pathShape(relative), { path, operations });
@@ -376,51 +411,72 @@ function requestBodySchema(operation) {
   return operation.requestBody?.content?.["application/json"]?.schema ?? null;
 }
 
+const CALL_SITE_FILES = [
+  "admin.ts",
+  "blocks.ts",
+  "categories.ts",
+  "dashboard.ts",
+  "internal.server.ts",
+  "meta.ts",
+  "templates.ts",
+];
+
+// Scanned line by line rather than with one multi-line pattern: the api
+// wrappers write `method`, `path` and `query` as consecutive properties, and
+// three anchored patterns read that shape without the backtracking a single
+// cross-line alternation would carry over whole source files.
+const METHOD_LINE = /^\s*method:\s*"([A-Z]+)",\s*$/;
+const PATH_LINE = /^\s*path:\s*(?:"([^"]+)"|`([^`]+)`),\s*$/;
+const QUERY_LINE = /^\s*query:\s*\{([^}]*)\},\s*$/;
+
+/** The key names a `query: { ... }` line declares, and nothing for any other line. */
+function queryKeys(line) {
+  const bag = QUERY_LINE.exec(line);
+  if (!bag) return [];
+  return bag[1]
+    .split(",")
+    .map((entry) => entry.split(":")[0].trim())
+    .filter((name) => /^[a-zA-Z_]\w*$/.test(name));
+}
+
+/** The calls one api wrapper source declares. */
+function callSitesIn(file, source) {
+  const lines = source.split("\n");
+  const calls = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const method = METHOD_LINE.exec(lines[index]);
+    if (!method) continue;
+    const target = PATH_LINE.exec(lines[index + 1] ?? "");
+    if (!target) {
+      fail(
+        "call-sites",
+        `src/runtime/api/${file}:${index + 1} declares \`method: "${method[1]}"\` with no \`path\` on the ` +
+          "next line; the call-site scan cannot read it.",
+      );
+      continue;
+    }
+    calls.push({
+      file,
+      method: method[1],
+      // `${...}` is a path parameter wherever it appears.
+      path: (target[1] ?? target[2]).replace(/\$\{[^}]*\}/g, "{}"),
+      query: queryKeys(lines[index + 2] ?? ""),
+    });
+  }
+  return calls;
+}
+
 /** The `{method, path}` pairs the api wrappers actually call. */
 function callSites() {
   const dir = join(ROOT, "src", "runtime", "api");
-  const files = ["admin.ts", "blocks.ts", "categories.ts", "dashboard.ts", "internal.server.ts", "meta.ts", "templates.ts"];
-  // Scanned line by line rather than with one multi-line pattern: the api
-  // wrappers write `method`, `path` and `query` as consecutive properties, and
-  // three anchored patterns read that shape without the backtracking a single
-  // cross-line alternation would carry over whole source files.
-  const METHOD = /^\s*method:\s*"([A-Z]+)",\s*$/;
-  const PATH = /^\s*path:\s*(?:"([^"]+)"|`([^`]+)`),\s*$/;
-  const QUERY = /^\s*query:\s*\{([^}]*)\},\s*$/;
   const calls = [];
-  for (const file of files) {
+  for (const file of CALL_SITE_FILES) {
     const path = join(dir, file);
     if (!existsSync(path)) {
       fail("call-sites", `src/runtime/api/${file} is gone — the call-site scan is reading a stale file list.`);
       continue;
     }
-    const lines = readFileSync(path, "utf-8").split("\n");
-    for (let index = 0; index < lines.length; index += 1) {
-      const method = METHOD.exec(lines[index]);
-      if (!method) continue;
-      const target = PATH.exec(lines[index + 1] ?? "");
-      if (!target) {
-        fail(
-          "call-sites",
-          `src/runtime/api/${file}:${index + 1} declares \`method: "${method[1]}"\` with no \`path\` on the ` +
-            "next line; the call-site scan cannot read it.",
-        );
-        continue;
-      }
-      const bag = QUERY.exec(lines[index + 2] ?? "");
-      calls.push({
-        file,
-        method: method[1],
-        // `${...}` is a path parameter wherever it appears.
-        path: (target[1] ?? target[2]).replace(/\$\{[^}]*\}/g, "{}"),
-        query: bag
-          ? bag[1]
-              .split(",")
-              .map((entry) => entry.split(":")[0].trim())
-              .filter((name) => /^[a-zA-Z_]\w*$/.test(name))
-          : [],
-      });
-    }
+    calls.push(...callSitesIn(file, readFileSync(path, "utf-8")));
   }
   if (calls.length === 0) {
     fail("call-sites", "the api call-site scan matched nothing; its pattern no longer fits src/runtime/api/**.");
