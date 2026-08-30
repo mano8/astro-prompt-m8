@@ -261,6 +261,37 @@ function blankAsAbsent(value: string | undefined): string | undefined {
  * itself. `page`/`pageSize` win over `skip`/`limit` when both are supplied,
  * because a paginator owns the offset.
  */
+/**
+ * The filter vocabulary an `/export/` endpoint understands (`A-C8`) — every
+ * `ServiceListQuery` field except `skip`/`limit`. Export routes are
+ * deliberately unpaginated, so there is no offset pair to send.
+ */
+export interface ServiceExportQuery {
+  [param: string]: string | undefined;
+  q?: string;
+  csrc?: string;
+  sort?: string;
+  order?: string;
+  f?: string;
+}
+
+/**
+ * Translate list params into an export query: the same filter vocabulary
+ * {@link toServiceListQuery} sends, minus `skip`/`limit`/`page`/`pageSize` —
+ * an export reads the whole filtered set, not one page of it.
+ */
+export function toServiceExportQuery(
+  params: Omit<ServiceListParams, "skip" | "limit" | "page" | "pageSize">
+): ServiceExportQuery {
+  return {
+    q: blankAsAbsent(params.q),
+    csrc: blankAsAbsent(params.csrc),
+    sort: blankAsAbsent(params.sort),
+    order: blankAsAbsent(params.order),
+    f: blankAsAbsent(params.f)
+  };
+}
+
 export function toServiceListQuery(params: ServiceListParams): ServiceListQuery {
   const offset =
     params.page !== undefined && params.pageSize !== undefined

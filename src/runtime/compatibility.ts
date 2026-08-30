@@ -1,12 +1,19 @@
 export const PROMPT_ENGINE_M8_CONTRACT_ID = "prompt-engine-m8";
-export const PROMPT_ENGINE_M8_CONTRACT_VERSION = "2.0.0";
+// Moved 2.0.0 -> 2.1.0 with prompt-engine-m8's own CONTRACT_VERSION, for the
+// `A-C8` export routes (`GET /prompt-block/export/`, `GET /prompt-template/
+// export/`). This package calls them, so it must not accept a service that
+// predates them: the axis is compared by exact string equality below, which is
+// what makes a 2.0.0 service fail preflight loudly instead of answering 404 on
+// "Export all" after passing it (`H12`, `B20`).
+export const PROMPT_ENGINE_M8_CONTRACT_VERSION = "2.1.0";
 export const PROMPT_ENGINE_M8_CONTRACT = `${PROMPT_ENGINE_M8_CONTRACT_ID}@${PROMPT_ENGINE_M8_CONTRACT_VERSION}` as const;
 // The service-version axis mirrors prompt-engine-m8's own CONTRACT_RANGE
-// (``>=2.0.0 <3.0.0``). It is orthogonal to the contract axis above and was left
+// (``>=2.1.0 <3.0.0``). It is orthogonal to the contract axis above and was left
 // on the 1.x baseline when the contract moved to 2.0.0, which made this guard
-// reject the very service it targets (prompt-engine-m8 serves version 2.0.0).
-export const PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION = "2.0.0";
-export const PROMPT_ENGINE_M8_MIN_SERVICE_VERSION = "2.0.0";
+// reject the very service it targets — hence the rule it now follows: the floor
+// moves whenever the contract axis does.
+export const PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION = "2.1.0";
+export const PROMPT_ENGINE_M8_MIN_SERVICE_VERSION = "2.1.0";
 export const PROMPT_ENGINE_M8_MAX_SERVICE_VERSION_EXCLUSIVE = "3.0.0";
 export const PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE = `>=${PROMPT_ENGINE_M8_MIN_SERVICE_VERSION} <${PROMPT_ENGINE_M8_MAX_SERVICE_VERSION_EXCLUSIVE}`;
 

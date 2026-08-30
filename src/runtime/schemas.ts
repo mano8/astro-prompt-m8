@@ -113,6 +113,21 @@ export const PromptBlocksPublicSchema = z
   .strict();
 export type PromptBlocksPublic = z.infer<typeof PromptBlocksPublicSchema>;
 
+/**
+ * `GET /prompt-block/export/` (`A-C8`): the whole filtered set, not one page.
+ * `count` is the filtered set's true size; `truncated` is `true` only when
+ * `data` holds fewer rows than `count` because the service's export cap
+ * (`MAX_EXPORT_SIZE`) was hit.
+ */
+export const PromptBlocksExportSchema = z
+  .object({
+    data: z.array(PromptBlockPublicSchema),
+    count: z.number().int().nonnegative(),
+    truncated: z.boolean()
+  })
+  .strict();
+export type PromptBlocksExport = z.infer<typeof PromptBlocksExportSchema>;
+
 // ---------------------------------------------------------------------------
 // Prompt templates
 // ---------------------------------------------------------------------------
@@ -166,6 +181,16 @@ export const PromptTemplatesPublicSchema = z
   })
   .strict();
 export type PromptTemplatesPublic = z.infer<typeof PromptTemplatesPublicSchema>;
+
+/** `GET /prompt-template/export/` (`A-C8`) — see {@link PromptBlocksExportSchema}. */
+export const PromptTemplatesExportSchema = z
+  .object({
+    data: z.array(PromptTemplatePublicSchema),
+    count: z.number().int().nonnegative(),
+    truncated: z.boolean()
+  })
+  .strict();
+export type PromptTemplatesExport = z.infer<typeof PromptTemplatesExportSchema>;
 
 // ---------------------------------------------------------------------------
 // Compose

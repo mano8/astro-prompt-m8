@@ -11,10 +11,10 @@ import {
 
 describe("prompt-engine-m8 compatibility", () => {
   it("exports the tested contract metadata", () => {
-    expect(PROMPT_ENGINE_M8_CONTRACT).toBe("prompt-engine-m8@2.0.0");
-    expect(PROMPT_ENGINE_M8_CONTRACT_VERSION).toBe("2.0.0");
-    expect(PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION).toBe("2.0.0");
-    expect(PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE).toBe(">=2.0.0 <3.0.0");
+    expect(PROMPT_ENGINE_M8_CONTRACT).toBe("prompt-engine-m8@2.1.0");
+    expect(PROMPT_ENGINE_M8_CONTRACT_VERSION).toBe("2.1.0");
+    expect(PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION).toBe("2.1.0");
+    expect(PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE).toBe(">=2.1.0 <3.0.0");
   });
 
   it("returns unknown without metadata", () => {
@@ -24,7 +24,7 @@ describe("prompt-engine-m8 compatibility", () => {
   });
 
   it("treats matching contract version or full id as compatible", () => {
-    expect(getPromptEngineM8Compatibility({ contract_version: "2.0.0" }).status).toBe("compatible");
+    expect(getPromptEngineM8Compatibility({ contract_version: "2.1.0" }).status).toBe("compatible");
     expect(
       getPromptEngineM8Compatibility({ prompt_engine_m8_contract: PROMPT_ENGINE_M8_CONTRACT })
         .status
@@ -39,11 +39,16 @@ describe("prompt-engine-m8 compatibility", () => {
   });
 
   it("checks the service version range", () => {
-    expect(isPromptEngineM8ServiceVersionCompatible("2.0.0")).toBe(true);
     expect(isPromptEngineM8ServiceVersionCompatible("2.1.0")).toBe(true);
     expect(isPromptEngineM8ServiceVersionCompatible("2.1.0-beta+build.1")).toBe(true);
     expect(isPromptEngineM8ServiceVersionCompatible("2.9.5")).toBe(true);
     expect(isPromptEngineM8ServiceVersionCompatible("0.0.1")).toBe(false);
+    // 2.0.0 is a deny case as of this release, and it is the one that matters:
+    // it is a *published, pullable* image (`tepochtli/prompt-engine-m8:2.0.0`),
+    // not a hypothetical. It predates `A-C8`'s export routes, which this package
+    // now calls, so admitting it is exactly the `H12` shape `B20` closed — the
+    // preflight passing and "Export all" then answering 404.
+    expect(isPromptEngineM8ServiceVersionCompatible("2.0.0")).toBe(false);
     // The retired 1.x baseline this guard used to admit is now a real deny case.
     expect(isPromptEngineM8ServiceVersionCompatible("1.1.0")).toBe(false);
     expect(isPromptEngineM8ServiceVersionCompatible("1.9.9")).toBe(false);
@@ -62,13 +67,13 @@ describe("prompt-engine-m8 compatibility", () => {
 
   it("reads nested contract.version and version", () => {
     const compat = getPromptEngineM8Compatibility({
-      contract: { name: "prompt-engine-m8", version: "2.0.0" },
-      version: "2.0.0"
+      contract: { name: "prompt-engine-m8", version: "2.1.0" },
+      version: "2.1.0"
     });
     expect(compat.status).toBe("compatible");
-    expect(compat.contractVersion).toBe("2.0.0");
-    expect(compat.serviceVersion).toBe("2.0.0");
-    expect(getPromptEngineM8Compatibility({ version: "2.0.0", contract: { version: "0.0" } }).status).toBe(
+    expect(compat.contractVersion).toBe("2.1.0");
+    expect(compat.serviceVersion).toBe("2.1.0");
+    expect(getPromptEngineM8Compatibility({ version: "2.1.0", contract: { version: "0.0" } }).status).toBe(
       "incompatible"
     );
   });
@@ -80,6 +85,27 @@ describe("prompt-engine-m8 compatibility", () => {
     // service-version axis drifted a full major behind unnoticed.
     const meta = {
       service: "PromptEngineM8",
+      version: "2.1.0",
+      api_version: "v1",
+      contract: {
+        name: "prompt-engine-m8",
+        version: "2.1.0",
+        range: ">=2.1.0 <3.0.0"
+      }
+    };
+    expect(getPromptEngineM8Compatibility(meta)).toMatchObject({
+      status: "compatible",
+      contractVersion: "2.1.0",
+      serviceVersion: "2.1.0"
+    });
+    expect(() => assertPromptEngineM8Compatibility(meta)).not.toThrow();
+
+    // The previous release's payload, verbatim, is now refused on both axes.
+    // This is the `B20` regression lock: `A-C8` shipped the export routes while
+    // the contract axis stayed on 2.0.0, so this exact payload was admitted and
+    // the routes it implies were absent.
+    const previousRelease = {
+      service: "PromptEngineM8",
       version: "2.0.0",
       api_version: "v1",
       contract: {
@@ -88,12 +114,13 @@ describe("prompt-engine-m8 compatibility", () => {
         range: ">=2.0.0 <3.0.0"
       }
     };
-    expect(getPromptEngineM8Compatibility(meta)).toMatchObject({
-      status: "compatible",
-      contractVersion: "2.0.0",
-      serviceVersion: "2.0.0"
+    expect(getPromptEngineM8Compatibility(previousRelease)).toMatchObject({
+      status: "incompatible",
+      contractVersion: "2.0.0"
     });
-    expect(() => assertPromptEngineM8Compatibility(meta)).not.toThrow();
+    expect(() => assertPromptEngineM8Compatibility(previousRelease)).toThrow(
+      /prompt-engine-m8@2\.1\.0/
+    );
 
     // Adjacent out-of-range service version on the same payload shape.
     const nextMajor = { ...meta, version: "3.0.0" };
@@ -129,19 +156,19 @@ describe("prompt-engine-m8 compatibility", () => {
 
   it("accepts a nested contract that names the expected issuer", () => {
     expect(
-      getPromptEngineM8Compatibility({ contract: { name: "prompt-engine-m8", version: "2.0.0" } })
-    ).toMatchObject({ status: "compatible", contractVersion: "2.0.0" });
+      getPromptEngineM8Compatibility({ contract: { name: "prompt-engine-m8", version: "2.1.0" } })
+    ).toMatchObject({ status: "compatible", contractVersion: "2.1.0" });
   });
 
   it("asserts compatible metadata and rejects otherwise", () => {
     expect(() =>
-      assertPromptEngineM8Compatibility({ contract_version: "2.0.0" }, false)
+      assertPromptEngineM8Compatibility({ contract_version: "2.1.0" }, false)
     ).not.toThrow();
     expect(() => assertPromptEngineM8Compatibility({})).toThrow();
     expect(() =>
       assertPromptEngineM8Compatibility({ prompt_contract_version: "0.0" }, false)
     ).toThrow(/0.0/);
-    expect(assertPromptEngineM8Compatibility({ service_version: "2.0.0" })).toMatchObject({
+    expect(assertPromptEngineM8Compatibility({ service_version: "2.1.0" })).toMatchObject({
       status: "compatible"
     });
   });

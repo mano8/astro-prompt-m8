@@ -1,9 +1,10 @@
 import { request } from "../client.js";
-import { toServiceListQuery } from "../listParams.js";
+import { toServiceExportQuery, toServiceListQuery } from "../listParams.js";
 import { unwrap, unwrapOrNull } from "./blocks.js";
 import {
   ComposedPromptSchema,
   PromptTemplateListParamsSchema,
+  PromptTemplatesExportSchema,
   PromptTemplatesPublicSchema,
   ResponseMessageSchema,
   ResponseModelBaseSchema,
@@ -14,6 +15,7 @@ import {
   type PromptTemplateListParams,
   type PromptTemplatePublic,
   type PromptTemplateUpdate,
+  type PromptTemplatesExport,
   type PromptTemplatesPublic,
   type ResponseMessage,
   type ResponseModelBase,
@@ -36,6 +38,22 @@ export async function listTemplates(
     path: "/prompt-template/",
     query: toServiceListQuery(PromptTemplateListParamsSchema.parse(params)),
     schema: PromptTemplatesPublicSchema,
+    auth: true
+  });
+}
+
+/**
+ * Export every prompt template in the filtered set (`A-C8`), not one fetched
+ * page. Same contract as {@link exportBlocks} over the template vocabulary.
+ */
+export async function exportTemplates(
+  params: Omit<PromptTemplateListParams, "skip" | "limit" | "page" | "pageSize"> = {}
+): Promise<PromptTemplatesExport> {
+  return request({
+    method: "GET",
+    path: "/prompt-template/export/",
+    query: toServiceExportQuery(PromptTemplateListParamsSchema.parse(params)),
+    schema: PromptTemplatesExportSchema,
     auth: true
   });
 }

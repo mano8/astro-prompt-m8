@@ -1,5 +1,11 @@
 export { PromptQueryProvider, type PromptQueryProviderProps } from "./PromptQueryProvider.js";
 export { PromptProvider, usePromptContext, type PromptContextValue } from "./PromptProvider.js";
+export {
+  PromptErrorBoundary,
+  type PromptErrorBoundaryFallbackProps,
+  type PromptErrorBoundaryLabels,
+  type PromptErrorBoundaryProps
+} from "./PromptErrorBoundary.js";
 export { RequireSuperuser } from "./RequireSuperuser.js";
 export { PromptBlockLibrary } from "./PromptBlockLibrary.js";
 export { PromptTemplateEditor } from "./PromptTemplateEditor.js";

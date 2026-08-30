@@ -23,7 +23,18 @@ const NPM_CACHE_DIR = join(ROOT, ".tmp", "npm-cache");
 
 // Spawned through node rather than an `npm`/`npm.cmd` shim so the script runs
 // the same way on Windows and CI Linux, with no shell interpolation.
-const NPM_CLI = join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+//
+// Where npm sits relative to the node binary is not the same on both, which is
+// what this list is for. npm sets `npm_execpath` when it invokes a run-script,
+// so it is right wherever npm actually lives; the fallbacks cover a direct
+// `node scripts/...` run, where npm is beside the binary on Windows but under
+// `../lib` on POSIX — the layout the CI toolcache uses.
+const NPM_CLI_CANDIDATES = [
+  process.env.npm_execpath,
+  join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+  join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")
+].filter((candidate) => typeof candidate === "string" && candidate.endsWith(".js"));
+const NPM_CLI = NPM_CLI_CANDIDATES.find((candidate) => existsSync(candidate)) ?? "";
 
 /** Every subpath `package.json` publishes must resolve from the install. */
 const EXPECTED_EXPORT_SUBPATHS = [
@@ -170,8 +181,11 @@ function verifyExports(installedRoot) {
   }
 
   // The published contract metadata is what a host reads to pin its service.
+  // Moved to 2.1.0 with `A-C8`'s export routes (`B20`): this package calls
+  // them, so the contract a host reads out of the tarball must name the release
+  // that serves them, not the one it was branched from.
   assert(
-    packageJson.promptEngineM8?.contract === "prompt-engine-m8@2.0.0",
+    packageJson.promptEngineM8?.contract === "prompt-engine-m8@2.1.0",
     `unexpected published contract: ${packageJson.promptEngineM8?.contract}`
   );
 }
@@ -199,7 +213,10 @@ function verifyConsumerRuns() {
 
 function main() {
   assertExists(FIXTURE_DIR, "tarball consumer fixture");
-  assertExists(NPM_CLI, "npm cli");
+  assert(
+    NPM_CLI !== "",
+    `no npm cli found. Looked in:\n  ${NPM_CLI_CANDIDATES.join("\n  ")}`
+  );
 
   rmSync(TMP_DIR, { recursive: true, force: true });
   mkdirSync(WORK_DIR, { recursive: true });

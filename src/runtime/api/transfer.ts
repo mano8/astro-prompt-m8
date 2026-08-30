@@ -1,5 +1,6 @@
-import { getBlock, createBlock, getBlockBySlug } from "./blocks.js";
+import { exportBlocks, getBlock, createBlock, getBlockBySlug } from "./blocks.js";
 import {
+  exportTemplates,
   getTemplate,
   createTemplate,
   getTemplateBySlug,
@@ -11,8 +12,21 @@ import {
   toPortableBlock,
   toPortableTemplate,
   type PortableBlock,
-  type PromptExport
+  type PromptBlockListParams,
+  type PromptExport,
+  type PromptTemplateListParams
 } from "../schemas.js";
+
+/** Result of a bulk, filter-scoped export (`A-C8`). */
+export type FilteredExportResult = {
+  payload: PromptExport;
+  /** Rows actually in `payload` — equals `totalCount` unless `truncated`. */
+  exportedCount: number;
+  /** The filtered set's true size, per the service's `count`. */
+  totalCount: number;
+  /** `true` when the filtered set exceeded the service's export cap. */
+  truncated: boolean;
+};
 
 /** A block/template touched by an import, identified without server ids. */
 export type TransferItem = { slug: string | null; name: string };
@@ -36,6 +50,41 @@ export async function exportBlockById(blockId: number): Promise<PromptExport> {
 export async function exportTemplateById(templateId: number): Promise<PromptExport> {
   const template = await getTemplate(templateId);
   return buildPromptExport({ templates: [toPortableTemplate(template)] });
+}
+
+/**
+ * Build a user-agnostic export payload for every block in the filtered set
+ * (`A-C8`), not the one page a server-driven table happens to be showing.
+ * `params` carries the same filter vocabulary the block table sends, minus
+ * paging — `exportBlocks` accepts none of that, by design.
+ */
+export async function exportFilteredBlocks(
+  params: Omit<PromptBlockListParams, "skip" | "limit" | "page" | "pageSize"> = {}
+): Promise<FilteredExportResult> {
+  const result = await exportBlocks(params);
+  return {
+    payload: buildPromptExport({ blocks: result.data.map(toPortableBlock) }),
+    exportedCount: result.data.length,
+    totalCount: result.count,
+    truncated: result.truncated
+  };
+}
+
+/**
+ * Build a user-agnostic export payload for every template in the filtered
+ * set (`A-C8`). Each template's blocks are embedded in full, same as
+ * {@link exportTemplateById}, so the payload stays self-contained.
+ */
+export async function exportFilteredTemplates(
+  params: Omit<PromptTemplateListParams, "skip" | "limit" | "page" | "pageSize"> = {}
+): Promise<FilteredExportResult> {
+  const result = await exportTemplates(params);
+  return {
+    payload: buildPromptExport({ templates: result.data.map(toPortableTemplate) }),
+    exportedCount: result.data.length,
+    totalCount: result.count,
+    truncated: result.truncated
+  };
 }
 
 /**

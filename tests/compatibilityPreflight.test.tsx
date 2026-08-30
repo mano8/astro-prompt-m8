@@ -17,9 +17,9 @@ import { resetPromptConfig } from "../src/runtime/config.js";
 
 const compatibleMeta = {
   service: "prompt-engine-m8",
-  version: "2.0.0",
+  version: "2.1.0",
   api_version: "v1",
-  contract: { name: "prompt-engine-m8", version: "2.0.0", range: ">=2.0.0 <3.0.0" }
+  contract: { name: "prompt-engine-m8", version: "2.1.0", range: ">=2.1.0 <3.0.0" }
 };
 
 function jsonResponse(body: unknown) {

@@ -29,20 +29,20 @@ function assert(condition: unknown, message: string): asserts condition {
 // The contract the package declares must match what package.json publishes,
 // or a consumer's compatibility check is asserting against a stale constant.
 assert(
-  PROMPT_ENGINE_M8_CONTRACT === "prompt-engine-m8@2.0.0",
+  PROMPT_ENGINE_M8_CONTRACT === "prompt-engine-m8@2.1.0",
   `unexpected contract: ${PROMPT_ENGINE_M8_CONTRACT}`
 );
 assert(
-  PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE === ">=2.0.0 <3.0.0",
+  PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE === ">=2.1.0 <3.0.0",
   `unexpected service range: ${PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE}`
 );
 
 // A real `{API_PREFIX}/meta` payload parses, and the guard blesses it.
 const meta = ServiceMetaSchema.parse({
   service: "prompt-engine-m8",
-  version: "2.0.0",
+  version: "2.1.0",
   api_version: "v1",
-  contract: { name: "prompt-engine-m8", version: "2.0.0", range: ">=2.0.0 <3.0.0" }
+  contract: { name: "prompt-engine-m8", version: "2.1.0", range: ">=2.1.0 <3.0.0" }
 });
 assert(
   assertPromptEngineM8Compatibility(meta).status === "compatible",

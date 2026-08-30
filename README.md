@@ -39,6 +39,7 @@ Pinned to `prompt-engine-m8@2.0.0` (supported service-version range
 - [Content Security Policy](#content-security-policy)
 - [shadcn views (registry)](#shadcn-views-registry)
 - [Contract surface](#contract-surface)
+- [Contract-drift gate](#contract-drift-gate)
 - [Commands](#commands)
 - [License](#license)
 
@@ -48,13 +49,18 @@ This package targets the `prompt-engine-m8@2.0.0` API contract and was tested
 against `prompt-engine-m8` service version `2.0.0`. Supported backend service
 versions are `>=2.0.0 <3.0.0`.
 
-Compatibility helpers are exported from `@mano8/astro-prompt-m8/compatibility`.
-Pass the backend `/meta` payload (or flat version fields) straight to the assert:
+`PromptProvider` runs this preflight automatically, once per session: it calls
+the new `GET /meta` wrapper and renders `state-error` / `state-unauthorized`
+instead of proceeding against an incompatible service, so most consumers never
+call the assert directly. Compatibility helpers are exported from
+`@mano8/astro-prompt-m8/compatibility` for headless callers that own their own
+provider tree:
 
 ```ts
 import { assertPromptEngineM8Compatibility } from "@mano8/astro-prompt-m8/compatibility";
+import { getServiceMeta } from "@mano8/astro-prompt-m8/api";
 
-const meta = await fetch(`${base}/prompt/meta`).then((r) => r.json());
+const meta = await getServiceMeta();
 assertPromptEngineM8Compatibility(meta);
 ```
 
@@ -125,7 +131,18 @@ setPromptAuthAdapter(createFaAuthAdapter({ getToken, refreshToken }));
 ```ts
 import { blocks, templates } from "@mano8/astro-prompt-m8/api";
 
-const list = await blocks.list({ skip: 0, limit: 50 });
+// skip/limit still work unchanged; q/csrc/sort/order/f are additive and
+// forwarded straight to prompt-engine-m8's declared list vocabulary — an
+// unsupported value there is a 422, not a silently ignored parameter.
+const list = await blocks.list({
+  skip: 0,
+  limit: 50,
+  q: "release notes",
+  csrc: "name",
+  sort: "updated_at",
+  order: "desc",
+  f: "role,dynamic"
+});
 const composed = await templates.compose(1, [{ id: 2, content: "Be terse." }]);
 ```
 
@@ -236,12 +253,53 @@ The plugin exports explicit subpaths (`./api`, `./client`, `./schemas`,
 `./list-params`, `./compatibility`, `./middleware`, `./internal-server`). See
 `package.json` for the exact list.
 
+## Contract-drift gate
+
+The preflight above checks a *version* at runtime. `npm run verify:contract-drift`
+checks the *shape* at build time: it diffs this package's Zod schemas, its
+mirrored list vocabulary and its pinned service range against
+`prompt-engine-m8`'s published OpenAPI document, and fails CI when they
+disagree. It reports:
+
+- a route or verb the api wrappers call that the service does not publish;
+- a list parameter the service declares that the request schemas reject, one
+  the schemas accept that the service does not declare, and one the schemas
+  accept that the wire helper then drops before sending it;
+- a `csrc` / `sort` / `order` / facet value published on one side and not the
+  other;
+- a required request-body field the service demands that a create/update schema
+  treats as optional — the failure that validates locally and 422s on the wire;
+- a published response property a `.strict()` schema would refuse.
+
+A deliberate narrowing (this package does not send `slug` on category writes,
+because the service derives it) is recorded in the script with its reason, so a
+dropped field can never pass as an intended one.
+
+The document is read from `contracts/prompt-engine-m8.openapi.json`, a vendored
+copy of the artifact `prompt-engine-m8` publishes at `contracts/openapi.json`.
+That copy is what makes the gate runnable standalone — no network, no sibling
+checkout — and it is a copy, so it bounds the gate to the service as of the last
+refresh. Point it at a live service, or at a checkout, to close that loop:
+
+```bash
+npm run verify:contract-drift -- --openapi https://api.example.com/prompt/openapi.json
+npm run verify:contract-drift -- --openapi ../prompt-engine-m8/contracts/openapi.json
+
+# read from a live service and refresh the vendored copy in one step
+npm run verify:contract-drift -- --openapi https://api.example.com/prompt/openapi.json --write
+```
+
+`PROMPT_ENGINE_M8_OPENAPI` does the same as `--openapi`. The gate reads the
+built package, so run `npm run build` first.
+
 ## Commands
 
 - `npm run build` — `tsc` → `dist/` + `npm run build:registry`
 - `npm run build:registry` — regenerate `registry/r/*.json` from `registry.json`
 - `npm run typecheck` — `tsc --noEmit`
 - `npm test` — Vitest with coverage (100% on the non-React runtime)
+- `npm run verify:contract-drift` — diff the Zod surface and the pinned range
+  against `prompt-engine-m8`'s published OpenAPI document (needs `dist/`)
 
 ## License
 
