@@ -170,8 +170,11 @@ function verifyExports(installedRoot) {
   }
 
   // The published contract metadata is what a host reads to pin its service.
+  // Moved to 2.1.0 with `A-C8`'s export routes (`B20`): this package calls
+  // them, so the contract a host reads out of the tarball must name the release
+  // that serves them, not the one it was branched from.
   assert(
-    packageJson.promptEngineM8?.contract === "prompt-engine-m8@2.0.0",
+    packageJson.promptEngineM8?.contract === "prompt-engine-m8@2.1.0",
     `unexpected published contract: ${packageJson.promptEngineM8?.contract}`
   );
 }

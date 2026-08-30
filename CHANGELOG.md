@@ -8,18 +8,60 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ## [Unreleased]
 
-## [2.1.0] - 2026-08-29
+## [2.1.0] - 2026-08-30
 
-Documentation and dependency-floor release. No behaviour, no wire format and no
-published API surface changes; `2.0.0` consumers upgrade by installing it.
+Additive API release, paired with `prompt-engine-m8@2.1.0`. **Install the two
+together** — this release moves the contract axis, so it does not accept a
+`2.0.0` service and a `2.0.0` client does not accept a `2.1.0` one.
 
-It exists because two changes landed on `2.0.0` after it was published and
-neither is a release of its own: the auth peer floor moved with the fleet, and
-the role hierarchy this package used to restate is now imported. `C22`'s
-changelog/version parity gate is what requires them to be released rather than
-left in `[Unreleased]` on an already-published number.
+Three things landed on `2.0.0` after it was published and none is a release of
+its own: the `A-C8` bulk-export surface, the auth peer floor moving with the
+fleet, and the role hierarchy this package used to restate now being imported.
+`C22`'s changelog/version parity gate is what requires them to be released
+rather than left on an already-published number.
+
+> An earlier draft of this section described the release as "documentation and
+> dependency-floor" with "no published API surface changes". That was wrong:
+> `A-C8`'s export wrappers ship in it, and their entries had been written into
+> the already-published `## [2.0.0]` section (`G14`). Both are corrected here —
+> the entry is moved down into this section unchanged, and the summary now
+> describes what the release actually contains.
+
+### Added
+
+- **True bulk export over the filtered set (`A-C8`).** The block and template
+  editors' "Export all" button now calls `GET /prompt-block/export/` /
+  `GET /prompt-template/export/` — a second, deliberately unpaginated read
+  carrying the same `q`/`csrc`/`sort`/`order`/`f` filter as the list route —
+  instead of bundling only the one page the table happened to be showing
+  (`C7`'s interim fix, which relabelled the button "Export page" rather than
+  claim more than it did). `exportFilteredBlocks`/`exportFilteredTemplates` in
+  `runtime/api/transfer.ts`, wired through `usePromptTransfer`'s
+  `exportFilteredBlocksMutation`/`exportFilteredTemplatesMutation`.
+  `toServiceExportQuery` in `listParams.ts` is `toServiceListQuery` without the
+  offset pair, since the export routes accept none of it. A response past the
+  service's `MAX_EXPORT_SIZE` cap sets `truncated: true`, surfaced as a toast
+  naming the exported/total counts rather than silently dropping rows.
 
 ### Changed
+
+- **BREAKING — the supported contract moves to `prompt-engine-m8@2.1.0`**
+  (`B20`, option (a)). `PROMPT_ENGINE_M8_CONTRACT_VERSION`,
+  `PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION` and
+  `PROMPT_ENGINE_M8_MIN_SERVICE_VERSION` all move to `2.1.0`, and the
+  `promptEngineM8` metadata block in `package.json` follows
+  (`serviceVersionRange` `>=2.1.0 <3.0.0`). The entry above is the reason: this
+  package now *calls* the export routes, and `A-C8` had shipped them on both
+  sides while leaving the contract axis on `2.0.0`. A host running the
+  published `prompt-engine-m8:2.0.0` image therefore passed
+  `assertPromptEngineM8Compatibility` cleanly and then `404`ed on "Export all"
+  — `H12` re-formed one release later, the exact defect `C17` spent a step
+  closing. The axis is compared by **exact string equality**, so the mismatch
+  is now refused at preflight, with the reason naming both versions, rather
+  than surfacing as a broken button. `contracts/prompt-engine-m8.openapi.json`
+  is refreshed from the service's published `2.1.0` artifact, so
+  `verify:contract-drift` gates against the release this client actually
+  targets.
 
 - **The fleet gate exempts one authorization specifier** (remediation `W7.7`,
   decision 4). `scripts/verify-fleet-gates.mjs` is carried byte-identically by
@@ -108,19 +150,6 @@ its service.
 
 ### Added
 
-- **True bulk export over the filtered set (`A-C8`).** The block and template
-  editors' "Export all" button now calls `GET /prompt-block/export/` /
-  `GET /prompt-template/export/` — a second, deliberately unpaginated read
-  carrying the same `q`/`csrc`/`sort`/`order`/`f` filter as the list route —
-  instead of bundling only the one page the table happened to be showing
-  (`C7`'s interim fix, which relabelled the button "Export page" rather than
-  claim more than it did). `exportFilteredBlocks`/`exportFilteredTemplates` in
-  `runtime/api/transfer.ts`, wired through `usePromptTransfer`'s
-  `exportFilteredBlocksMutation`/`exportFilteredTemplatesMutation`.
-  `toServiceExportQuery` in `listParams.ts` is `toServiceListQuery` without the
-  offset pair, since the export routes accept none of it. A response past the
-  service's `MAX_EXPORT_SIZE` cap sets `truncated: true`, surfaced as a toast
-  naming the exported/total counts rather than silently dropping rows.
 - **Server-driven list contract for blocks and templates (`C7`).** The prompt
   block and template editors now forward the full list vocabulary —
   `q`/`csrc`/`sort`/`order`/`f` alongside `skip`/`limit` — to

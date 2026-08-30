@@ -503,9 +503,9 @@ describe("admin API", () => {
 describe("meta API and session preflight", () => {
   const validMeta = {
     service: "prompt-engine-m8",
-    version: "2.0.0",
+    version: "2.1.0",
     api_version: "v1",
-    contract: { name: "prompt-engine-m8", version: "2.0.0", range: ">=2.0.0 <3.0.0" }
+    contract: { name: "prompt-engine-m8", version: "2.1.0", range: ">=2.1.0 <3.0.0" }
   };
 
   beforeEach(() => {
@@ -527,8 +527,8 @@ describe("meta API and session preflight", () => {
     expect(result).toMatchObject({
       status: "compatible",
       unreachable: false,
-      serviceVersion: "2.0.0",
-      contractVersion: "2.0.0"
+      serviceVersion: "2.1.0",
+      contractVersion: "2.1.0"
     });
   });
 
@@ -560,7 +560,10 @@ describe("meta API and session preflight", () => {
     requestMock.mockResolvedValueOnce({
       ...validMeta,
       version: "3.0.0",
-      contract: { name: "prompt-engine-m8", version: "2.0.0", range: ">=2.0.0 <3.0.0" }
+      // Contract axis deliberately left matching, so this case exercises the
+      // service-version axis rather than short-circuiting on the contract check
+      // that now runs before it.
+      contract: { name: "prompt-engine-m8", version: "2.1.0", range: ">=2.1.0 <3.0.0" }
     });
     const result = await meta.runPromptEngineM8Preflight();
     expect(result.status).toBe("incompatible");
@@ -592,9 +595,9 @@ describe("meta API and session preflight", () => {
   it("passes an unrecognised field through instead of failing on it", async () => {
     requestMock.mockResolvedValueOnce({
       service: "prompt-engine-m8",
-      version: "2.0.0",
+      version: "2.1.0",
       api_version: "v1",
-      contract: { name: "prompt-engine-m8", version: "2.0.0", range: ">=2.0.0 <3.0.0" },
+      contract: { name: "prompt-engine-m8", version: "2.1.0", range: ">=2.1.0 <3.0.0" },
       extra: "a field the shared schema may add later"
     });
     const result = await meta.runPromptEngineM8Preflight();

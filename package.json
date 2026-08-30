@@ -118,9 +118,9 @@
     "esbuild": "^0.28.1"
   },
   "promptEngineM8": {
-    "contract": "prompt-engine-m8@2.0.0",
-    "testedServiceVersion": "2.0.0",
-    "serviceVersionRange": ">=2.0.0 <3.0.0",
+    "contract": "prompt-engine-m8@2.1.0",
+    "testedServiceVersion": "2.1.0",
+    "serviceVersionRange": ">=2.1.0 <3.0.0",
     "openapi": "contracts/prompt-engine-m8.openapi.json"
   },
   "allowScripts": {
