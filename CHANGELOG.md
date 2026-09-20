@@ -8,6 +8,23 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-09-20
+
+### Added
+
+- `tests/compatibility.test.ts` now locks the published `promptEngineM8`
+  package metadata (`contract`, `testedServiceVersion`, `serviceVersionRange`)
+  against the `compatibility.ts` constants it must mirror — the vitest twin of
+  the `scripts/verify-contract-drift.mjs` script gate, so a manifest/runtime
+  drift is caught in the ordinary test run as well as in the drift script
+  (`B12-manifest-runtime-parity-lock`).
+
+### Changed
+
+- Raised the `@mano8/astro-auth-m8` floor from `^2.4.1` to `^2.6.0` in both
+  `peerDependencies` and `devDependencies`, matching the version this package
+  is actually tested against on the published registry (`G15` residual).
+
 ## [2.1.0] - 2026-08-30
 
 Additive API release, paired with `prompt-engine-m8@2.1.0`. **Install the two
