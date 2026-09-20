@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 import {
   assertPromptEngineM8Compatibility,
   getPromptEngineM8Compatibility,
@@ -9,12 +12,30 @@ import {
   PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION
 } from "../src/runtime/compatibility.js";
 
+const packageJson = JSON.parse(
+  readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../package.json"), "utf-8")
+) as { promptEngineM8?: { contract?: string; testedServiceVersion?: string; serviceVersionRange?: string } };
+
 describe("prompt-engine-m8 compatibility", () => {
   it("exports the tested contract metadata", () => {
     expect(PROMPT_ENGINE_M8_CONTRACT).toBe("prompt-engine-m8@2.1.0");
     expect(PROMPT_ENGINE_M8_CONTRACT_VERSION).toBe("2.1.0");
     expect(PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION).toBe("2.1.0");
     expect(PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE).toBe(">=2.1.0 <3.0.0");
+  });
+
+  // The `promptEngineM8` block is the published, machine-readable half of the
+  // same claim `compatibility.ts` enforces at runtime: a host or a fleet tool
+  // reads the package metadata, the browser preflight reads the constants.
+  // `scripts/verify-contract-drift.mjs` already gates this in CI; this vitest
+  // twin gives the same lock in the ordinary `npm test` run, matching the
+  // other three plugins' shape.
+  it("keeps the published promptEngineM8 package metadata identical to the constants", () => {
+    expect(packageJson.promptEngineM8).toMatchObject({
+      contract: PROMPT_ENGINE_M8_CONTRACT,
+      testedServiceVersion: PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION,
+      serviceVersionRange: PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE
+    });
   });
 
   it("returns unknown without metadata", () => {
