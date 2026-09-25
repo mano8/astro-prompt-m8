@@ -25,6 +25,18 @@ just this package's own surface: a backend contract repoint is always a major.
   `peerDependencies` and `devDependencies`, matching the version this package
   is actually tested against on the published registry (`G15` residual).
 
+### Security
+
+- **npm is reached only from a published release**
+  (`B30-pre-publish-hardening` leg 5, finding `G25`). `npm-publish.yml` ran
+  `npm publish` on any `workflow_dispatch`, from any branch, into an `npm`
+  environment with no protection. A dispatch now
+  runs `npm publish --dry-run`; a release fails unless its tag, with the `v`
+  stripped, is `package.json`'s `version`; so the tree this release is
+  tagged from carries the fixed workflow.
+  `tests/publish-workflow.test.ts` locks each rule. The operator's `v*` tag
+  policy on the `npm` environment is the platform half of the same rule.
+
 ## [2.1.0] - 2026-08-30
 
 Additive API release, paired with `prompt-engine-m8@2.1.0`. **Install the two
