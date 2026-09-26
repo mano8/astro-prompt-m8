@@ -8,6 +8,14 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-09-26
+
+**Patch.** Tracks the published `@mano8/astro-ui-m8` `1.5.2` and
+`@mano8/astro-auth-m8` `2.7.1` (`B39-astro-ui-changelog-release`, finding
+`G38`). The only shipped change is `package.json`'s floors. The contract
+stays `prompt-engine-m8@2.1.0`, range `>=2.1.0 <3.0.0`, and the tested
+service version stays `2.2.1`.
+
 ### Added
 
 - **A lock that does not pin every package fails the build**
@@ -35,6 +43,20 @@ just this package's own surface: a backend contract repoint is always a major.
   impossible to write. The test now asserts what a fold must never do:
   `[Unreleased]` heads the file, and no bullet under it repeats one a
   released section already carries.
+- `@mano8/astro-ui-m8` floor `^1.5.1` → `^1.5.2` (`dependencies`) and
+  `@mano8/astro-auth-m8` `^2.7.0` → `^2.7.1` (`peerDependencies` and
+  `devDependencies`, still equal), the newest published releases (§0.5's
+  explicit-pin rule). The lock moves those two entries, each with its
+  registry `resolved` and `sha512` `integrity`.
+
+### Security
+
+- **The publish job verifies the lock before it installs**
+  (`B37-publish-lock-guard`, finding `G36`). `B34` guarded every `CI.yaml`
+  job but not the one that holds `id-token: write` and builds the tarball,
+  and the environment's `tag:v*` rule matches a tag by name, not by where it
+  points. `npm-publish.yml` now runs `npm run verify:lock-integrity` before
+  `npm ci`, and `tests/publish-workflow.test.ts` holds the order.
 
 ## [2.2.0] - 2026-09-26
 
