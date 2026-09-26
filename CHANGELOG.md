@@ -8,6 +8,34 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ## [Unreleased]
 
+### Added
+
+- **A lock that does not pin every package fails the build**
+  (`B34-npm-lock-integrity-guard`, finding `G34`(b)).
+  `scripts/verify-lock-integrity.mjs` (`npm run verify:lock-integrity`)
+  refuses a `package-lock.json` below `lockfileVersion` 3, or one with any
+  entry that lacks `integrity` or `resolved`, carries a non-`sha512` hash,
+  resolves outside `https://registry.npmjs.org/`, or is a link or `file:`
+  source, and names every offending key. `npm ci` installs an entry with no
+  `integrity` without checking a hash and says nothing, which is how `G33`
+  went unseen. CI runs it before `npm ci` in every job that installs.
+  `tests/lock-integrity.test.ts` proves each refusal against a fixture lock
+  and asserts this repository's own lock passes. The script is
+  dependency-free and byte-identical in the fleet's six npm repositories.
+  This lock already passed; the fixtures prove the red path. Only
+  `package.json`'s `scripts` gains an entry, so no release is owed.
+
+### Changed
+
+- **`[Unreleased]` may carry work that ships no release**
+  (`B34-npm-lock-integrity-guard`). `tests/changelogVersionParity.test.ts`
+  asserted an empty `[Unreleased]` on every commit. The `prompt-engine-m8`
+  A32 test it ports asserts that only as a post-fold snapshot, and says
+  mid-wave content is normal. The standing rule made the bullet above
+  impossible to write. The test now asserts what a fold must never do:
+  `[Unreleased]` heads the file, and no bullet under it repeats one a
+  released section already carries.
+
 ## [2.2.0] - 2026-09-26
 
 Tracks the published `prompt-engine-m8` `2.2.1` (`B31-plugin-tracking-tail`,
