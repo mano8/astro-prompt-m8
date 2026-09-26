@@ -45,9 +45,13 @@ The contract stays `prompt-engine-m8@2.1.0` and the range `>=2.1.0 <3.0.0`.
   `2.1.0` / service `2.2.1`. It had answered `2.0.0`, which the exact-match
   contract check refuses, so the gallery's preflight failed against its own
   stub.
-- Raised the `@mano8/astro-auth-m8` floor from `^2.4.1` to `^2.6.0` in both
+- Raised the `@mano8/astro-auth-m8` floor from `^2.4.1` to `^2.7.0` in both
   `peerDependencies` and `devDependencies`, matching the version this package
   is actually tested against on the published registry (`G15` residual).
+  The unpublished `2.1.1` had raised it to `^2.6.0`; `2.2.0` takes it to the
+  `2.7.0` tracking release (`fa-auth-m8` `2.2.3`), published before this one
+  (`B31-plugin-tracking-tail` leg 2). `package-lock.json` resolves the `2.7.0`
+  tarball.
 
 ### Security
 
