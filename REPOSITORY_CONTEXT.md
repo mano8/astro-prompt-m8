@@ -15,8 +15,8 @@ host source edits outside documented registration points.
 
 - Communicate with `prompt-engine-m8` over HTTP only; never import service code.
 - Publish `@mano8/astro-prompt-m8` and keep `promptEngineM8` package metadata,
-  schemas, and compatibility checks aligned with `prompt-engine-m8@2.0.0`, tested
-  with service version 2.0.0 and supporting `>=2.0.0 <3.0.0`.
+  schemas, and compatibility checks aligned with `prompt-engine-m8@2.1.0`, tested
+  with service version 2.2.1 and supporting `>=2.1.0 <3.0.0`.
 - `scripts/verify-contract-drift.mjs` (`npm run verify:contract-drift`, a CI gate)
   diffs that alignment against `prompt-engine-m8`'s published OpenAPI document:
   routes and verbs, the list vocabulary in both directions, required request-body

@@ -1,6 +1,6 @@
 {
   "name": "@mano8/astro-prompt-m8",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Astro integration and headless client for prompt-engine-m8.",
   "type": "module",
   "license": "MIT",
@@ -119,7 +119,7 @@
   },
   "promptEngineM8": {
     "contract": "prompt-engine-m8@2.1.0",
-    "testedServiceVersion": "2.1.0",
+    "testedServiceVersion": "2.2.1",
     "serviceVersionRange": ">=2.1.0 <3.0.0",
     "openapi": "contracts/prompt-engine-m8.openapi.json"
   },
