@@ -8,7 +8,14 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ## [Unreleased]
 
-## [2.1.1] - 2026-09-20
+## [2.2.0] - 2026-09-26
+
+Tracks the published `prompt-engine-m8` `2.2.1` (`B31-plugin-tracking-tail`,
+finding `G32`). **Renumbered from the unpublished `2.1.1`**, the Wave 6c
+one-bump rule: this section carries everything `2.1.1` did plus the tracking
+move, and `2.1.1` never ships. A minor rather than a patch because an exported
+compatibility constant changes value, the fleet's tracking-release convention.
+The contract stays `prompt-engine-m8@2.1.0` and the range `>=2.1.0 <3.0.0`.
 
 ### Added
 
@@ -21,9 +28,42 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ### Changed
 
-- Raised the `@mano8/astro-auth-m8` floor from `^2.4.1` to `^2.6.0` in both
+- `PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION` and `package.json`'s
+  `promptEngineM8.testedServiceVersion` move `2.1.0` → `2.2.1`. Read from
+  `v2.1.0` to `v2.2.1` on the service, the published
+  `contracts/openapi.json` differs in `info.version` alone, so no route,
+  schema or list vocabulary moved; `2.2.x` carries the Debian patch layer, a
+  UTC PostgreSQL session clock and typing fixes.
+- `contracts/prompt-engine-m8.openapi.json` is refreshed from the `v2.2.1`
+  tag with `verify:contract-drift --write`. The diff is `info.version`
+  `2.1.0` → `2.2.1`, and the gate reads no drift.
+- `README.md` and `REPOSITORY_CONTEXT.md` name the `2.1.0` contract, the
+  `>=2.1.0 <3.0.0` range and the tested `2.2.1`. Both had still read
+  `prompt-engine-m8@2.0.0` / tested `2.0.0` / `>=2.0.0` since `2.1.0` moved
+  the contract.
+- The preview gallery's `/meta` stub (`fixtures/preview`) answers contract
+  `2.1.0` / service `2.2.1`. It had answered `2.0.0`, which the exact-match
+  contract check refuses, so the gallery's preflight failed against its own
+  stub.
+- Raised the `@mano8/astro-auth-m8` floor from `^2.4.1` to `^2.7.0` in both
   `peerDependencies` and `devDependencies`, matching the version this package
   is actually tested against on the published registry (`G15` residual).
+  The unpublished `2.1.1` had raised it to `^2.6.0`; `2.2.0` takes it to the
+  `2.7.0` tracking release (`fa-auth-m8` `2.2.3`), published before this one
+  (`B31-plugin-tracking-tail` leg 2). `package-lock.json` resolves the `2.7.0`
+  tarball.
+
+### Security
+
+- **npm is reached only from a published release**
+  (`B30-pre-publish-hardening` leg 5, finding `G25`). `npm-publish.yml` ran
+  `npm publish` on any `workflow_dispatch`, from any branch, into an `npm`
+  environment with no protection. A dispatch now
+  runs `npm publish --dry-run`; a release fails unless its tag, with the `v`
+  stripped, is `package.json`'s `version`; so the tree this release is
+  tagged from carries the fixed workflow.
+  `tests/publish-workflow.test.ts` locks each rule. The operator's `v*` tag
+  policy on the `npm` environment is the platform half of the same rule.
 
 ## [2.1.0] - 2026-08-30
 

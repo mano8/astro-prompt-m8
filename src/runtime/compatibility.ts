@@ -11,8 +11,10 @@ export const PROMPT_ENGINE_M8_CONTRACT = `${PROMPT_ENGINE_M8_CONTRACT_ID}@${PROM
 // (``>=2.1.0 <3.0.0``). It is orthogonal to the contract axis above and was left
 // on the 1.x baseline when the contract moved to 2.0.0, which made this guard
 // reject the very service it targets — hence the rule it now follows: the floor
-// moves whenever the contract axis does.
-export const PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION = "2.1.0";
+// moves whenever the contract axis does. The tested version is simply the
+// newest published service this client was exercised against: 2.2.1, whose
+// published OpenAPI differs from 2.1.0's in ``info.version`` alone.
+export const PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION = "2.2.1";
 export const PROMPT_ENGINE_M8_MIN_SERVICE_VERSION = "2.1.0";
 export const PROMPT_ENGINE_M8_MAX_SERVICE_VERSION_EXCLUSIVE = "3.0.0";
 export const PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE = `>=${PROMPT_ENGINE_M8_MIN_SERVICE_VERSION} <${PROMPT_ENGINE_M8_MAX_SERVICE_VERSION_EXCLUSIVE}`;

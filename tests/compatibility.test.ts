@@ -20,7 +20,7 @@ describe("prompt-engine-m8 compatibility", () => {
   it("exports the tested contract metadata", () => {
     expect(PROMPT_ENGINE_M8_CONTRACT).toBe("prompt-engine-m8@2.1.0");
     expect(PROMPT_ENGINE_M8_CONTRACT_VERSION).toBe("2.1.0");
-    expect(PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION).toBe("2.1.0");
+    expect(PROMPT_ENGINE_M8_TESTED_SERVICE_VERSION).toBe("2.2.1");
     expect(PROMPT_ENGINE_M8_SERVICE_VERSION_RANGE).toBe(">=2.1.0 <3.0.0");
   });
 
