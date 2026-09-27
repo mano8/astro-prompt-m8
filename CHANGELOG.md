@@ -8,6 +8,51 @@ just this package's own surface: a backend contract repoint is always a major.
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-09-27
+
+**Patch.** Admits `@astrojs/react` 7 and Starlight 0.42 as peers, tracks
+the published `@mano8/astro-ui-m8` `1.5.3` and `@mano8/astro-auth-m8`
+`2.7.2`, and adds the fleet's dependency compatibility gate. Peer ranges only
+widen, with both old lines still accepted, and the floors that rise are to
+published releases. The contract stays `prompt-engine-m8@2.1.0`, range
+`>=2.1.0 <3.0.0`, and the tested service version stays `2.2.1`.
+
+### Added
+
+- **A tree that breaks a declared range fails the build.**
+  `scripts/verify-dependency-compat.mjs` (`npm run verify:dependency-compat`)
+  and `tests/dependency-compat.test.ts`, byte-identical across the fleet's
+  six npm repositories and first shipped in `@mano8/astro-ui-m8` `1.5.3`.
+  The gate reads `npm ls --all --json --long` with peer edges forced on. It
+  names every installed package outside a range declared on it, and every
+  missing required dependency or peer that a required edge reaches. CI runs
+  it after `npm ci`.
+- **`.npmrc` with `legacy-peer-deps=true`**, byte-identical fleet-wide. The
+  four `npm ci --legacy-peer-deps` steps in `CI.yaml` and `npm-publish.yml`
+  become plain `npm ci`: the setting now lives in one place, local installs
+  and Dependabot included, and the gate above enforces the ranges it no
+  longer checks.
+
+### Changed
+
+- **Peers `@astrojs/react` `^6.0.1` → `^6.0.1 || ^7.0.0` and
+  `@astrojs/starlight` `^0.41.3` → `^0.41.3 || ^0.42.0`**, matching
+  `@mano8/astro-auth-m8` `2.7.2`. `src/` imports nothing from
+  `@astrojs/react`. From Starlight it imports only
+  `components/StarlightPage.astro`, which 0.42 still ships. The starter
+  routes build against 0.42.4. Starlight 0.42 is the line built for `astro`
+  7.3, whose optional `@astrojs/markdown-remark` `^7.3.0` peer Starlight 0.41
+  cannot meet.
+- `@mano8/astro-ui-m8` floor `^1.5.2` → `^1.5.3` (`dependencies`) and
+  `@mano8/astro-auth-m8` `^2.7.1` → `^2.7.2` (`peerDependencies` and
+  `devDependencies`, still equal), the newest published releases, each read
+  back as npm `latest`.
+- Dev dependencies test the new lines, matching `fa-ui-m8`: `@astrojs/react`
+  `^7.0.0`, `@astrojs/starlight` `^0.42.4`, `astro` `^7.3.4`, `react` /
+  `react-dom` / `@types/react` `^19.3.0`, `@typescript-eslint/*` `^8.70.1`,
+  `globals` `^17.12.0`. `@types/react-dom` `^19.3.0` is now declared: it is
+  a required peer of `@astrojs/react` that npm no longer installs on its own.
+
 ## [2.2.1] - 2026-09-26
 
 **Patch.** Tracks the published `@mano8/astro-ui-m8` `1.5.2` and

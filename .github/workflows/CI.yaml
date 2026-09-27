@@ -38,7 +38,16 @@ jobs:
         run: npm run verify:lock-integrity
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
+
+      # `.npmrc` sets `legacy-peer-deps=true` so Dependabot and lock
+      # regenerations never stall on a peer conflict; npm then no longer checks
+      # peer ranges itself. This gate does, over the tree `npm ci` just built:
+      # an installed package outside any range declared on it fails the build.
+      # `npm test` runs it again (tests/dependency-compat.test.ts), so the
+      # publish job is covered too.
+      - name: Dependency compatibility
+        run: npm run verify:dependency-compat
 
       - name: Type check
         run: npm run typecheck
@@ -103,7 +112,7 @@ jobs:
         run: npm run verify:lock-integrity
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Run tests
         run: npm test
@@ -147,7 +156,7 @@ jobs:
         run: npm run verify:lock-integrity
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Run npm audit (HIGH/CRITICAL advisories)
         run: npm audit --audit-level=high
